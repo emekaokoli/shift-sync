@@ -1,0 +1,21 @@
+{
+  "name": "shift-sync-monorepo",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --parallel -r dev",
+    "dev:all": "pnpm --parallel -r dev",
+    "dev:backend": "pnpm --filter @shift-sync/backend dev",
+    "dev:web": "pnpm --filter @shift-sync/web dev",
+    "build": "pnpm -r build",
+    "db:generate": "npx prisma generate --schema=./apps/backend/prisma/schema.prisma",
+    "db:push": "npx prisma db push --schema=./apps/backend/prisma/schema.prisma",
+    "db:seed": "npx tsx apps/backend/prisma/seed.ts",
+    "test": "pnpm --filter @shift-sync/backend test",
+    "test:watch": "pnpm --filter @shift-sync/backend test:watch",
+    "lint": "pnpm --filter @shift-sync/backend lint",
+    "lint:fix": "pnpm --filter @shift-sync/backend lint:fix"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}
