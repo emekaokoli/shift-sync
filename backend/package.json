@@ -1,0 +1,20 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.19.0",
+  "dependencies": {
+    "dayjs": "^1.11.20",
+    "express": "^5.2.1",
+    "pg": "^8.20.0",
+    "prisma": "^7.6.0",
+    "zod": "^4.3.6"
+  }
+}
