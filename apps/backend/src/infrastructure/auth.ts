@@ -3,7 +3,7 @@ import jwt, { type SignOptions } from 'jsonwebtoken';
 
 const JWT_SECRET: string =
   process.env.JWT_SECRET || 'dev-secret-change-in-production';
-const JWT_EXPIRES_IN: string = process.env.JWT_EXPIRES_IN || '10m';
+const JWT_EXPIRES_IN: string = process.env.JWT_EXPIRES_IN || '7d';
 
 export interface JWTPayload {
   userId: string;

@@ -5,8 +5,11 @@ import { approveSwap } from '../application/approveSwap';
 import { requestSwap } from '../application/requestSwap';
 import { swapRepository } from '../infrastructure/repositories';
 import { ResponseUtils } from '../infrastructure/response';
+import { authMiddleware } from './middleware/auth';
 
 const router: Router = Router();
+
+router.use(authMiddleware);
 
 const getQueryString = (
   value: unknown,

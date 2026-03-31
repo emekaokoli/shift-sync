@@ -3,8 +3,11 @@ import { Request, Response, Router } from 'express';
 import { z } from 'zod';
 import { locationRepository } from '../infrastructure/repositories';
 import { ResponseUtils } from '../infrastructure/response';
+import { authMiddleware } from './middleware/auth';
 
 const router: Router = Router();
+
+router.use(authMiddleware);
 
 router.get('/', async (req: Request, res: Response) => {
   try {

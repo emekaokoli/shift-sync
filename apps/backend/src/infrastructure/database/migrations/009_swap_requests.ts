@@ -10,6 +10,7 @@ export async function up(knex: Knex): Promise<void> {
     table.enum("status", ["PENDING", "ACCEPTED", "APPROVED", "REJECTED", "CANCELLED", "EXPIRED"]).defaultTo("PENDING");
     table.text("response_reason");
     table.uuid("responded_by").references("id").inTable("users").onDelete("SET NULL");
+    table.integer("version").defaultTo(1);
     table.timestamps(true, true);
     table.index("shift_id");
     table.index("requester_id");

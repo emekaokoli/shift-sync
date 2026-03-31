@@ -11,8 +11,11 @@ import { suggestAlternatives, validateAssignment } from '../domain/engine';
 import { shiftRepository } from '../infrastructure/repositories';
 import { ResponseUtils } from '../infrastructure/response';
 import db from '../infrastructure/database';
+import { authMiddleware } from './middleware/auth';
 
 const router: Router = Router();
+
+router.use(authMiddleware);
 
 const getQueryString = (
   value: unknown,
