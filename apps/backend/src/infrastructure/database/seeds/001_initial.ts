@@ -316,6 +316,42 @@ export async function seed(knex: Knex): Promise<void> {
 
   await knex('shift_assignments').insert(assignments);
 
+  // Create swap requests for testing
+  await knex('swap_requests').insert([
+    {
+      shift_id: createdShifts[0].id,
+      requester_id: userMap['staff1@coastaleats.com'],
+      target_id: userMap['staff2@coastaleats.com'],
+      type: 'SWAP',
+      status: 'PENDING',
+      version: 1,
+    },
+    {
+      shift_id: createdShifts[1].id,
+      requester_id: userMap['staff2@coastaleats.com'],
+      target_id: null,
+      type: 'DROP',
+      status: 'ACCEPTED',
+      version: 1,
+    },
+    {
+      shift_id: createdShifts[2].id,
+      requester_id: userMap['staff3@coastaleats.com'],
+      target_id: userMap['staff4@coastaleats.com'],
+      type: 'SWAP',
+      status: 'APPROVED',
+      version: 1,
+    },
+    {
+      shift_id: createdShifts[3].id,
+      requester_id: userMap['staff5@coastaleats.com'],
+      target_id: null,
+      type: 'DROP',
+      status: 'PENDING',
+      version: 1,
+    },
+  ]);
+
   console.log('Seed data created successfully!');
   console.log('Users created:');
   console.log('  Admin: admin@coastaleats.com / password123');

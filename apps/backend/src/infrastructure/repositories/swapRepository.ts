@@ -74,6 +74,49 @@ export const swapRepository = {
     return query;
   },
 
+  findManyWithRelations(filter?: SwapFilter, trx?: Knex.Transaction): Promise<any[]> {
+    const queryDb = getDb(trx);
+    let query = queryDb('swap_requests')
+      .select(
+        'swap_requests.id',
+        'swap_requests.shift_id',
+        'swap_requests.requester_id',
+        'swap_requests.target_id',
+        'swap_requests.type',
+        'swap_requests.status',
+        'swap_requests.response_reason',
+        'swap_requests.responded_by',
+        'swap_requests.version',
+        'swap_requests.created_at',
+        'swap_requests.updated_at',
+        db.raw("JSON_BUILD_OBJECT('id', requester.id, 'name', requester.name) as requester"),
+        db.raw("JSON_BUILD_OBJECT('id', target.id, 'name', target.name) as target"),
+        db.raw("JSON_BUILD_OBJECT('id', shifts.id, 'start_time', shifts.start_time, 'end_time', shifts.end_time, 'location', JSON_BUILD_OBJECT('id', locations.id, 'name', locations.name)) as shift"),
+      )
+      .leftJoin('users as requester', 'swap_requests.requester_id', 'requester.id')
+      .leftJoin('users as target', 'swap_requests.target_id', 'target.id')
+      .leftJoin('shifts', 'swap_requests.shift_id', 'shifts.id')
+      .leftJoin('locations', 'shifts.location_id', 'locations.id')
+      .orderBy('swap_requests.created_at', 'desc');
+
+    if (filter?.status) {
+      query = query.where('swap_requests.status', filter.status);
+    }
+    if (filter?.shiftId) {
+      query = query.where('swap_requests.shift_id', filter.shiftId);
+    }
+    if (filter?.userId) {
+      query = query.where(function () {
+        this.where('swap_requests.requester_id', filter.userId).orWhere(
+          'swap_requests.target_id',
+          filter.userId,
+        );
+      });
+    }
+
+    return query;
+  },
+
   findById(id: string, trx?: Knex.Transaction): Promise<SwapRequest | null> {
     const queryDb = getDb(trx);
     return queryDb('swap_requests')

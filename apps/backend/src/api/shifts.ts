@@ -47,6 +47,22 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
+router.get('/my-shifts', async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user?.userId;
+    
+    if (!userId) {
+      return ResponseUtils.unauthorized(res, 'User not authenticated');
+    }
+
+    const shifts = await shiftRepository.findByStaffId(userId);
+
+    return ResponseUtils.success(res, shifts, 'My shifts fetched successfully');
+  } catch (error) {
+    return ResponseUtils.handleError(res, error);
+  }
+});
+
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const shift = await shiftRepository.findById(req.params.id as string);

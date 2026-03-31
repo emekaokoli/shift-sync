@@ -24,7 +24,7 @@ router.get('/', async (req: Request, res: Response) => {
   try {
     const { status, userId, shiftId } = req.query;
 
-    const swaps = await swapRepository.findMany({
+    const swaps = await swapRepository.findManyWithRelations({
       status: getQueryString(status),
       shiftId: getQueryString(shiftId),
       userId: getQueryString(userId),
@@ -103,8 +103,11 @@ router.post('/', async (req: Request, res: Response) => {
 
 router.post('/:id/respond', async (req: Request, res: Response) => {
   try {
-    const { action } = swapResponseSchema.parse(req.body);
-    const userId = req.headers['x-user-id'] as string;
+    const actionSchema = z.object({
+      action: z.enum(['accept', 'reject', 'approve', 'cancel']),
+    });
+    const { action } = actionSchema.parse(req.body);
+    const userId = (req as any).user?.userId;
     const overrideReason = req.headers['x-override-reason'] as
       | string
       | undefined;

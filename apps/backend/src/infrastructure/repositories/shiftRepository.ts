@@ -166,6 +166,43 @@ export const shiftRepository = {
       .then((row) => row || null);
   },
 
+  findByStaffId(userId: string, trx?: Knex.Transaction): Promise<ShiftWithRelations[]> {
+    const queryDb = getDb(trx);
+    return queryDb('shifts')
+      .select(
+        ...shiftSelect,
+        db.raw(
+          "JSON_BUILD_OBJECT('id', locations.id, 'name', locations.name, 'timezone', locations.timezone) as location",
+        ),
+        db.raw(
+          "JSON_BUILD_OBJECT('id', required_skill.id, 'name', required_skill.name) as required_skill",
+        ),
+        db.raw(
+          "COALESCE(JSON_AGG(assignments.staff) FILTER (WHERE assignments.staff IS NOT NULL), '[]') as assignments",
+        ),
+      )
+      .leftJoin('locations', 'shifts.location_id', 'locations.id')
+      .leftJoin('skills as required_skill', 'shifts.required_skill_id', 'required_skill.id')
+      .leftJoin(
+        db('shift_assignments')
+          .select(
+            'shift_assignments.id',
+            'shift_assignments.shift_id',
+            db.raw(
+              "JSON_BUILD_OBJECT('id', users.id, 'name', users.name, 'email', users.email) as staff",
+            ),
+          )
+          .leftJoin('users', 'shift_assignments.staff_id', 'users.id')
+          .as('assignments'),
+        'assignments.shift_id',
+        'shifts.id',
+      )
+      .innerJoin('shift_assignments', 'shift_assignments.shift_id', 'shifts.id')
+      .where('shift_assignments.staff_id', userId)
+      .groupBy('shifts.id', 'locations.id', 'required_skill.id')
+      .orderBy('shifts.start_time', 'asc');
+  },
+
   async create(
     data: {
       location_id: string;
