@@ -1,19 +1,21 @@
-import { availabilitySchema, userUpdateSchema } from "@shift-sync/shared";
-import { Request, Response, Router } from "express";
-import { z } from "zod";
-import { staffRepository } from "../infrastructure/repositories";
-import { ResponseUtils } from "../infrastructure/response";
+import { availabilitySchema, userUpdateSchema } from '@shift-sync/shared';
+import { Request, Response, Router } from 'express';
+import { z } from 'zod';
+import { staffRepository } from '../infrastructure/repositories';
+import { ResponseUtils } from '../infrastructure/response';
 
 const router: Router = Router();
 
 const getQueryString = (
-  value: string | string[] | undefined,
+  value: unknown,
 ): string | undefined => {
   if (!value) return undefined;
-  return Array.isArray(value) ? value[0] : value;
+  if (Array.isArray(value)) return String(value[0]);
+  if (typeof value === 'object') return undefined;
+  return String(value);
 };
 
-router.get("/", async (req: Request, res: Response) => {
+router.get('/', async (req: Request, res: Response) => {
   try {
     const { locationId, role, skillId } = req.query;
 
@@ -23,52 +25,58 @@ router.get("/", async (req: Request, res: Response) => {
       skillId: getQueryString(skillId),
     });
 
-    return ResponseUtils.success(res, staff, "Staff fetched successfully");
+    return ResponseUtils.success(res, staff, 'Staff fetched successfully');
   } catch (error) {
     return ResponseUtils.handleError(res, error);
   }
 });
 
-router.get("/:id", async (req: Request, res: Response) => {
+router.get('/:id', async (req: Request, res: Response) => {
   try {
     const staff = await staffRepository.findById(req.params.id as string);
 
     if (!staff) {
-      return ResponseUtils.notFound(res, "Staff not found");
+      return ResponseUtils.notFound(res, 'Staff not found');
     }
 
-    return ResponseUtils.success(res, staff, "Staff fetched successfully");
+    return ResponseUtils.success(res, staff, 'Staff fetched successfully');
   } catch (error) {
     return ResponseUtils.handleError(res, error);
   }
 });
 
-router.patch("/:id", async (req: Request, res: Response) => {
+router.patch('/:id', async (req: Request, res: Response) => {
   try {
     const data = userUpdateSchema.parse(req.body);
 
-    const staff = await staffRepository.update(req.params.id as string, data);
+    const updates: Record<string, unknown> = {};
+    if (data.name) updates.name = data.name;
+    if (data.email) updates.email = data.email;
+    if (data.timezone) updates.timezone = data.timezone;
+    if (data.desiredHours) updates.desired_hours = data.desiredHours;
 
-    return ResponseUtils.success(res, staff, "Staff updated successfully");
+    const staff = await staffRepository.update(req.params.id as string, updates);
+
+    return ResponseUtils.success(res, staff, 'Staff updated successfully');
   } catch (error) {
     if (error instanceof z.ZodError) {
       return ResponseUtils.validationError(
         res,
-        "Validation failed",
+        'Validation failed',
         error.issues
-          .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
-          .join(", "),
+          .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
+          .join(', '),
       );
     }
     return ResponseUtils.handleError(res, error);
   }
 });
 
-router.post("/:id/skills", async (req: Request, res: Response) => {
+router.post('/:id/skills', async (req: Request, res: Response) => {
   try {
     const { skillId } = req.body;
     if (!skillId) {
-      return ResponseUtils.validationError(res, "skillId is required");
+      return ResponseUtils.validationError(res, 'skillId is required');
     }
 
     const userSkill = await staffRepository.addSkill(
@@ -76,29 +84,29 @@ router.post("/:id/skills", async (req: Request, res: Response) => {
       skillId,
     );
 
-    return ResponseUtils.success(res, userSkill, "Skill added successfully");
+    return ResponseUtils.success(res, userSkill, 'Skill added successfully');
   } catch (error) {
     return ResponseUtils.handleError(res, error);
   }
 });
 
-router.delete("/:id/skills/:skillId", async (req: Request, res: Response) => {
+router.delete('/:id/skills/:skillId', async (req: Request, res: Response) => {
   try {
     await staffRepository.removeSkill(
       req.params.id as string,
       req.params.skillId as string,
     );
-    return ResponseUtils.noContent(res, "Skill removed successfully");
+    return ResponseUtils.noContent(res, 'Skill removed successfully');
   } catch (error) {
     return ResponseUtils.handleError(res, error);
   }
 });
 
-router.post("/:id/locations", async (req: Request, res: Response) => {
+router.post('/:id/locations', async (req: Request, res: Response) => {
   try {
     const { locationId, isManager } = req.body;
     if (!locationId) {
-      return ResponseUtils.validationError(res, "locationId is required");
+      return ResponseUtils.validationError(res, 'locationId is required');
     }
 
     const userLocation = await staffRepository.addLocation(
@@ -110,7 +118,7 @@ router.post("/:id/locations", async (req: Request, res: Response) => {
     return ResponseUtils.success(
       res,
       userLocation,
-      "Location added successfully",
+      'Location added successfully',
     );
   } catch (error) {
     return ResponseUtils.handleError(res, error);
@@ -118,55 +126,58 @@ router.post("/:id/locations", async (req: Request, res: Response) => {
 });
 
 router.delete(
-  "/:id/locations/:locationId",
+  '/:id/locations/:locationId',
   async (req: Request, res: Response) => {
     try {
       await staffRepository.removeLocation(
         req.params.id as string,
         req.params.locationId as string,
       );
-      return ResponseUtils.noContent(res, "Location removed successfully");
+      return ResponseUtils.noContent(res, 'Location removed successfully');
     } catch (error) {
       return ResponseUtils.handleError(res, error);
     }
   },
 );
 
-router.post("/:id/availability", async (req: Request, res: Response) => {
+router.post('/:id/availability', async (req: Request, res: Response) => {
   try {
     const data = availabilitySchema.parse(req.body);
 
     const availability = await staffRepository.addAvailability(
       req.params.id as string,
       {
-        ...data,
-        specificDate: data.specificDate || null,
+        day_of_week: data.dayOfWeek,
+        start_time: data.startTime,
+        end_time: data.endTime,
+        is_recurring: data.isRecurring,
+        specific_date: data.specificDate || null,
       },
     );
 
     return ResponseUtils.created(
       res,
       availability,
-      "Availability set successfully",
+      'Availability set successfully',
     );
   } catch (error) {
     if (error instanceof z.ZodError) {
       return ResponseUtils.validationError(
         res,
-        "Validation failed",
+        'Validation failed',
         error.issues
-          .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
-          .join(", "),
+          .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
+          .join(', '),
       );
     }
     return ResponseUtils.handleError(res, error);
   }
 });
 
-router.delete("/availability/:id", async (req: Request, res: Response) => {
+router.delete('/availability/:id', async (req: Request, res: Response) => {
   try {
     await staffRepository.deleteAvailability(req.params.id as string);
-    return ResponseUtils.noContent(res, "Availability deleted successfully");
+    return ResponseUtils.noContent(res, 'Availability deleted successfully');
   } catch (error) {
     return ResponseUtils.handleError(res, error);
   }

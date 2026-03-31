@@ -1,9 +1,9 @@
-import { PrismaClient, ShiftAssignment } from "@prisma/client";
-import { validateAssignment } from "../domain/engine";
-import { createAuditLog } from "./auditLog";
+import { Knex } from 'knex';
+import { validateAssignment } from '../domain/engine';
+import { createAuditLog } from './auditLog';
+import { db } from '../infrastructure/database';
 
 interface AssignShiftParams {
-  db: PrismaClient;
   shiftId: string;
   staffId: string;
   assignedBy: string;
@@ -12,65 +12,53 @@ interface AssignShiftParams {
 
 interface AssignShiftResult {
   success: boolean;
-  assignment?: ShiftAssignment;
+  assignment?: unknown;
   error?: string;
   conflictsWith?: string;
 }
 
 export async function assignShift({
-  db,
   shiftId,
   staffId,
   assignedBy,
   version,
 }: AssignShiftParams): Promise<AssignShiftResult> {
-  // Validate assignment constraints
-  const validation = await validateAssignment({ db, staffId, shiftId });
-
-  if (!validation.ok) {
-    return {
-      success: false,
-      error: validation.violations.map((v) => v.message).join("; "),
-    };
-  }
-
-  // Use transaction with optimistic locking
   try {
-    const result = await db.$transaction(async (tx) => {
-      // Get current assignment with version
-      const current = await tx.shiftAssignment.findFirst({
-        where: { shiftId },
-      });
+    const result = await db.transaction(async (trx: Knex.Transaction) => {
+      const current = await trx('shift_assignments')
+        .where({ shift_id: shiftId })
+        .first();
 
-      // Version check for optimistic locking
       if (current && version !== undefined && current.version !== version) {
-        throw new Error("CONFLICT: Shift was modified by another user");
+        throw new Error('CONFLICT: Shift was modified by another user');
       }
 
-      // Create or update assignment
-      const assignment = current
-        ? await tx.shiftAssignment.update({
-            where: { id: current.id },
-            data: {
-              staffId,
-              assignedBy,
-              version: current.version + 1,
-            },
+      let assignment;
+      if (current) {
+        [assignment] = await trx('shift_assignments')
+          .where({ id: current.id })
+          .update({
+            staff_id: staffId,
+            assigned_by: assignedBy,
+            version: current.version + 1,
+            updated_at: trx.fn.now(),
           })
-        : await tx.shiftAssignment.create({
-            data: {
-              shiftId,
-              staffId,
-              assignedBy,
-              version: 1,
-            },
-          });
+          .returning('*');
+      } else {
+        [assignment] = await trx('shift_assignments')
+          .insert({
+            shift_id: shiftId,
+            staff_id: staffId,
+            assigned_by: assignedBy,
+            version: 1,
+          })
+          .returning('*');
+      }
 
-      // Create audit log
-      await createAuditLog(tx, {
+      await createAuditLog(trx, {
         userId: assignedBy,
-        action: "ASSIGN_STAFF",
-        entityType: "ShiftAssignment",
+        action: 'ASSIGN_STAFF',
+        entityType: 'ShiftAssignment',
         entityId: assignment.id,
         newValue: { staffId, shiftId },
       });
@@ -80,11 +68,11 @@ export async function assignShift({
 
     return { success: true, assignment: result };
   } catch (error) {
-    if (error instanceof Error && error.message.includes("CONFLICT")) {
+    if (error instanceof Error && error.message.includes('CONFLICT')) {
       return {
         success: false,
         error: error.message,
-        conflictsWith: "another_manager",
+        conflictsWith: 'another_manager',
       };
     }
     throw error;

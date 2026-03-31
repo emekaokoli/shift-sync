@@ -1,95 +1,84 @@
-import { PrismaClient, Shift, SwapRequest } from "@prisma/client";
-import { createAuditLog } from "./auditLog";
+import { Knex } from 'knex';
+import { createAuditLog } from './auditLog';
+import { db } from '../infrastructure/database';
 
 interface UpdateShiftParams {
-  db: PrismaClient;
   shiftId: string;
   updates: {
-    startTime?: Date;
-    endTime?: Date;
-    locationId?: string;
-    requiredSkillId?: string;
+    start_time?: Date;
+    end_time?: Date;
+    location_id?: string;
+    required_skill_id?: string;
     headcount?: number;
-    status?: "DRAFT" | "PUBLISHED" | "CANCELLED";
+    status?: 'DRAFT' | 'PUBLISHED' | 'CANCELLED';
+    published_at?: Date;
   };
   userId: string;
 }
 
 export async function updateShift({
-  db,
   shiftId,
   updates,
   userId,
 }: UpdateShiftParams): Promise<{
   success: boolean;
-  shift?: Shift;
+  shift?: unknown;
   error?: string;
-  cancelledSwaps?: SwapRequest[];
+  cancelledSwaps?: unknown[];
 }> {
   try {
-    const result = await db.$transaction(async (tx) => {
-      // Get current shift
-      const currentShift = await tx.shift.findUnique({
-        where: { id: shiftId },
-        include: {
-          swapRequests: {
-            where: { status: "PENDING" },
-          },
-        },
-      });
+    const result = await db.transaction(async (trx: Knex.Transaction) => {
+      const currentShift = await trx('shifts')
+        .where({ id: shiftId })
+        .first();
 
       if (!currentShift) {
-        throw new Error("Shift not found");
+        throw new Error('Shift not found');
       }
 
-      // Update shift
-      const updatedShift = await tx.shift.update({
-        where: { id: shiftId },
-        data: updates,
-      });
+      const [updatedShift] = await trx('shifts')
+        .where({ id: shiftId })
+        .update({
+          ...updates,
+          updated_at: trx.fn.now(),
+        })
+        .returning('*');
 
-      // Create audit log
-      await createAuditLog(tx, {
+      await createAuditLog(trx, {
         userId,
-        action: "UPDATE_SHIFT",
-        entityType: "Shift",
+        action: 'UPDATE_SHIFT',
+        entityType: 'Shift',
         entityId: shiftId,
         oldValue: {
-          startTime: currentShift.startTime.toISOString(),
-          endTime: currentShift.endTime.toISOString(),
+          start_time: currentShift.start_time,
+          end_time: currentShift.end_time,
           status: currentShift.status,
         },
         newValue: {
-          startTime: updatedShift.startTime.toISOString(),
-          endTime: updatedShift.endTime.toISOString(),
+          start_time: updatedShift.start_time,
+          end_time: updatedShift.end_time,
           status: updatedShift.status,
         },
       });
 
-      // Cancel pending swaps if shift time/location changed significantly
-      const cancelledSwaps: SwapRequest[] = [];
+      const cancelledSwaps: unknown[] = [];
 
-      if (updates.startTime || updates.endTime || updates.locationId) {
-        const pendingSwaps = currentShift.swapRequests.filter(
-          (s) => s.status === "PENDING",
-        );
+      if (updates.start_time || updates.end_time || updates.location_id) {
+        const pendingSwaps = await trx('swap_requests')
+          .where({ shift_id: shiftId, status: 'PENDING' });
 
         if (pendingSwaps.length > 0) {
-          await tx.swapRequest.updateMany({
-            where: {
-              id: { in: pendingSwaps.map((s) => s.id) },
-            },
-            data: { status: "CANCELLED" },
-          });
+          await trx('swap_requests')
+            .whereIn('id', pendingSwaps.map((s) => s.id))
+            .update({ status: 'CANCELLED', updated_at: trx.fn.now() });
 
-          // Log each cancellation
           for (const swap of pendingSwaps) {
-            await createAuditLog(tx, {
+            await createAuditLog(trx, {
               userId,
-              action: "SWAP_AUTO_CANCELLED",
-              entityType: "SwapRequest",
+              action: 'SWAP_AUTO_CANCELLED',
+              entityType: 'SwapRequest',
               entityId: swap.id,
-              newValue: { reason: "Shift was modified" },
+              newValue: { reason: 'Shift was modified' },
             });
           }
 
@@ -108,7 +97,7 @@ export async function updateShift({
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to update shift",
+      error: error instanceof Error ? error.message : 'Failed to update shift',
     };
   }
 }

@@ -1,5 +1,5 @@
 import type { Response } from "express";
-import type { ApiResponse, PaginatedData } from "@shift-sync/shared/types";
+import type { ApiResponse, PaginatedData } from "@shift-sync/shared";
 import { DomainError } from "./error";
 
 export class ResponseUtils {

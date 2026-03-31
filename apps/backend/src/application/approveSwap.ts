@@ -1,53 +1,40 @@
-import { PrismaClient, SwapRequest } from "@prisma/client";
-import { canTransition } from "../domain/swap";
-import { createAuditLog } from "./auditLog";
+import { Knex } from 'knex';
+import { canTransition } from '../domain/swap';
+import { createAuditLog } from './auditLog';
+import { db } from '../infrastructure/database';
 
 interface ApproveSwapParams {
-  db: PrismaClient;
   swapId: string;
-  action: "accept" | "reject" | "approve" | "cancel";
+  action: 'accept' | 'reject' | 'approve' | 'cancel';
   userId: string;
   overrideReason?: string;
 }
 
 export async function approveSwap({
-  db,
   swapId,
   action,
   userId,
   overrideReason,
 }: ApproveSwapParams): Promise<{
   success: boolean;
-  swap?: SwapRequest;
+  swap?: unknown;
   error?: string;
 }> {
-  const swap = await db.swapRequest.findUnique({
-    where: { id: swapId },
-    include: {
-      shift: true,
-      requester: true,
-      target: true,
-    },
-  });
+  const swap = await db('swap_requests').where({ id: swapId }).first();
 
   if (!swap) {
-    return { success: false, error: "Swap request not found" };
+    return { success: false, error: 'Swap request not found' };
   }
 
-  // Determine target status based on action
-  const statusMap: Record<
-    string,
-    "ACCEPTED" | "REJECTED" | "APPROVED" | "CANCELLED"
-  > = {
-    accept: "ACCEPTED",
-    reject: "REJECTED",
-    approve: "APPROVED",
-    cancel: "CANCELLED",
+  const statusMap: Record<string, 'ACCEPTED' | 'REJECTED' | 'APPROVED' | 'CANCELLED'> = {
+    accept: 'ACCEPTED',
+    reject: 'REJECTED',
+    approve: 'APPROVED',
+    cancel: 'CANCELLED',
   };
 
   const newStatus = statusMap[action];
 
-  // Validate transition
   if (!canTransition(swap.status, newStatus)) {
     return {
       success: false,
@@ -55,36 +42,35 @@ export async function approveSwap({
     };
   }
 
-  // For approve action, require override reason if it's a 7th day or overtime
-  if (action === "approve" && overrideReason) {
-    // Log the override reason in audit
-  }
-
   try {
-    const updatedSwap = await db.$transaction(async (tx) => {
-      const updated = await tx.swapRequest.update({
-        where: { id: swapId },
-        data: { status: newStatus },
-      });
+    const updatedSwap = await db.transaction(async (trx: Knex.Transaction) => {
+      const [updated] = await trx('swap_requests')
+        .where({ id: swapId })
+        .update({
+          status: newStatus,
+          responded_by: userId,
+          response_reason: overrideReason || null,
+          updated_at: trx.fn.now(),
+        })
+        .returning('*');
 
-      // If approved, also update the shift assignment
-      if (newStatus === "APPROVED") {
-        const targetId = swap.targetId;
+      if (newStatus === 'APPROVED') {
+        const targetId = swap.target_id;
 
         if (targetId) {
-          // Swap: reassign to target
-          await tx.shiftAssignment.updateMany({
-            where: { shiftId: swap.shiftId },
-            data: { staffId: targetId },
-          });
+          await trx('shift_assignments')
+            .where({ shift_id: swap.shift_id })
+            .update({
+              staff_id: targetId,
+              updated_at: trx.fn.now(),
+            });
         }
-        // If no target (drop), the shift becomes available (assignment stays removed)
       }
 
-      await createAuditLog(tx, {
+      await createAuditLog(trx, {
         userId,
         action: `SWAP_${newStatus}`,
-        entityType: "SwapRequest",
+        entityType: 'SwapRequest',
         entityId: swapId,
         oldValue: { status: swap.status },
         newValue: overrideReason
@@ -97,6 +83,6 @@ export async function approveSwap({
 
     return { success: true, swap: updatedSwap };
   } catch {
-    return { success: false, error: "Failed to update swap request" };
+    return { success: false, error: 'Failed to update swap request' };
   }
 }

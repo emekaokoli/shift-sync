@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import type { Knex } from 'knex';
 import { validateAssignment } from "./validateAssignment";
 
 interface Suggestion {
@@ -8,7 +8,7 @@ interface Suggestion {
 }
 
 interface SuggestAlternativesParams {
-  db: PrismaClient;
+  db: Knex;
   shiftId: string;
   limit?: number;
 }
@@ -18,35 +18,45 @@ export async function suggestAlternatives({
   shiftId,
   limit = 3,
 }: SuggestAlternativesParams): Promise<Suggestion[]> {
-  const shift = await db.shift.findUnique({
-    where: { id: shiftId },
-    include: { location: true },
-  });
+  const shiftRows = await db('shifts')
+    .where('id', shiftId)
+    .first();
 
-  if (!shift) {
+  if (!shiftRows) {
     return [];
   }
 
-  const qualifiedStaff = await db.user.findMany({
-    where: {
-      role: "STAFF",
-      skills: {
-        some: {
-          skillId: shift.requiredSkillId,
-        },
-      },
-      locationCertifications: {
-        some: {
-          locationId: shift.locationId,
-        },
-      },
-    },
-    include: {
-      skills: { include: { skill: true } },
-      locationCertifications: true,
-      availability: true,
-    },
-  });
+  const shift = {
+    id: shiftRows.id,
+    locationId: shiftRows.location_id,
+    requiredSkillId: shiftRows.required_skill_id,
+  };
+
+  const qualifiedStaffRows = await db('users')
+    .join('user_skills', 'users.id', 'user_skills.user_id')
+    .join('user_locations', 'users.id', 'user_locations.user_id')
+    .where('users.role', 'STAFF')
+    .where('user_skills.skill_id', shift.requiredSkillId)
+    .where('user_locations.location_id', shift.locationId)
+    .groupBy('users.id')
+    .select('users.id', 'users.name');
+
+  const qualifiedStaff = await Promise.all(
+    qualifiedStaffRows.map(async (staffRow) => ({
+      id: staffRow.id,
+      name: staffRow.name,
+      skills: await db('user_skills')
+        .join('skills', 'user_skills.skill_id', 'skills.id')
+        .where('user_skills.user_id', staffRow.id)
+        .select('skills.id', 'skills.name'),
+      locationCertifications: await db('user_locations')
+        .where('user_id', staffRow.id)
+        .select('location_id'),
+      availability: await db('availability')
+        .where('user_id', staffRow.id)
+        .select(),
+    }))
+  );
 
   const suggestions: Suggestion[] = [];
 

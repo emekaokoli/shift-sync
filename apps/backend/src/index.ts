@@ -3,12 +3,13 @@ import express, { Express, json } from "express";
 import helmet from "helmet";
 import { createServer as createHttpServer, Server as HttpServer } from "http";
 import pino from "pino-http";
+import authRouter from "./api/auth";
 import locationsRouter from "./api/locations";
 import shiftsRouter from "./api/shifts";
 import skillsRouter from "./api/skills";
 import staffRouter from "./api/staff";
 import swapsRouter from "./api/swaps";
-import { prisma } from "./infrastructure/db";
+import { db } from "./infrastructure/database";
 import { logger } from "./infrastructure/logger";
 import { apiLimiter } from "./infrastructure/rateLimit";
 import { setupSocketIO } from "./infrastructure/socket";
@@ -31,9 +32,10 @@ export function createApp(): Express {
   app.use(apiLimiter);
   app.use(pino());
   app.use(json());
-  app.set("prisma", prisma);
+  app.set("db", db);
 
   // API Routes
+  app.use("/api/auth", authRouter);
   app.use("/api/shifts", shiftsRouter);
   app.use("/api/staff", staffRouter);
   app.use("/api/swaps", swapsRouter);
@@ -58,7 +60,7 @@ export function createApp(): Express {
 
 export function createServer(app: Express): HttpServer {
   const httpServer = createHttpServer(app);
-  const PORT = process.env.PORT || 1968;
+  const PORT = process.env.PORT || 1964;
 
   setupSocketIO(httpServer);
 
@@ -70,7 +72,7 @@ export function createServer(app: Express): HttpServer {
   // Graceful shutdown
   process.on("SIGTERM", async () => {
     logger.info("SIGTERM received, closing server...");
-    await prisma.$disconnect();
+    await db.destroy();
     httpServer.close(() => {
       logger.info("Server closed");
       process.exit(0);

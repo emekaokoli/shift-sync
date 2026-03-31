@@ -1,21 +1,23 @@
-import { swapRequestSchema, swapResponseSchema } from "@shift-sync/shared";
-import { Request, Response, Router } from "express";
-import { z } from "zod";
-import { approveSwap } from "../application/approveSwap";
-import { requestSwap } from "../application/requestSwap";
-import { swapRepository } from "../infrastructure/repositories";
-import { ResponseUtils } from "../infrastructure/response";
+import { swapRequestSchema, swapResponseSchema } from '@shift-sync/shared';
+import { Request, Response, Router } from 'express';
+import { z } from 'zod';
+import { approveSwap } from '../application/approveSwap';
+import { requestSwap } from '../application/requestSwap';
+import { swapRepository } from '../infrastructure/repositories';
+import { ResponseUtils } from '../infrastructure/response';
 
 const router: Router = Router();
 
 const getQueryString = (
-  value: string | string[] | undefined,
+  value: unknown,
 ): string | undefined => {
   if (!value) return undefined;
-  return Array.isArray(value) ? value[0] : value;
+  if (Array.isArray(value)) return String(value[0]);
+  if (typeof value === 'object') return undefined;
+  return String(value);
 };
 
-router.get("/", async (req: Request, res: Response) => {
+router.get('/', async (req: Request, res: Response) => {
   try {
     const { status, userId, shiftId } = req.query;
 
@@ -28,42 +30,41 @@ router.get("/", async (req: Request, res: Response) => {
     return ResponseUtils.success(
       res,
       swaps,
-      "Swap requests fetched successfully",
+      'Swap requests fetched successfully',
     );
   } catch (error) {
     return ResponseUtils.handleError(res, error);
   }
 });
 
-router.get("/:id", async (req: Request, res: Response) => {
+router.get('/:id', async (req: Request, res: Response) => {
   try {
     const swap = await swapRepository.findById(req.params.id as string);
 
     if (!swap) {
-      return ResponseUtils.notFound(res, "Swap request not found");
+      return ResponseUtils.notFound(res, 'Swap request not found');
     }
 
     return ResponseUtils.success(
       res,
       swap,
-      "Swap request fetched successfully",
+      'Swap request fetched successfully',
     );
   } catch (error) {
     return ResponseUtils.handleError(res, error);
   }
 });
 
-router.post("/", async (req: Request, res: Response) => {
+router.post('/', async (req: Request, res: Response) => {
   try {
     const data = swapRequestSchema.parse(req.body);
-    const userId = req.headers["x-user-id"] as string;
+    const userId = req.headers['x-user-id'] as string;
 
     if (!userId) {
-      return ResponseUtils.unauthorized(res, "User ID required");
+      return ResponseUtils.unauthorized(res, 'User ID required');
     }
 
     const result = await requestSwap({
-      db: swapRepository.getPrismaClient(),
       shiftId: data.shiftId,
       requesterId: userId,
       targetId: data.targetId,
@@ -72,45 +73,44 @@ router.post("/", async (req: Request, res: Response) => {
     if (!result.success) {
       return ResponseUtils.error(
         res,
-        result.error || "Failed to create swap request",
+        result.error || 'Failed to create swap request',
         400,
       );
     }
 
-    const swap = await swapRepository.findById(result.swap!.id);
+    const swap = await swapRepository.findById((result.swap as { id: string }).id);
     return ResponseUtils.created(
       res,
       swap,
-      "Swap request created successfully",
+      'Swap request created successfully',
     );
   } catch (error) {
     if (error instanceof z.ZodError) {
       return ResponseUtils.validationError(
         res,
-        "Validation failed",
+        'Validation failed',
         error.issues
-          .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
-          .join(", "),
+          .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
+          .join(', '),
       );
     }
     return ResponseUtils.handleError(res, error);
   }
 });
 
-router.post("/:id/respond", async (req: Request, res: Response) => {
+router.post('/:id/respond', async (req: Request, res: Response) => {
   try {
     const { action } = swapResponseSchema.parse(req.body);
-    const userId = req.headers["x-user-id"] as string;
-    const overrideReason = req.headers["x-override-reason"] as
+    const userId = req.headers['x-user-id'] as string;
+    const overrideReason = req.headers['x-override-reason'] as
       | string
       | undefined;
 
     if (!userId) {
-      return ResponseUtils.unauthorized(res, "User ID required");
+      return ResponseUtils.unauthorized(res, 'User ID required');
     }
 
     const result = await approveSwap({
-      db: swapRepository.getPrismaClient(),
       swapId: req.params.id as string,
       action,
       userId,
@@ -120,7 +120,7 @@ router.post("/:id/respond", async (req: Request, res: Response) => {
     if (!result.success) {
       return ResponseUtils.error(
         res,
-        result.error || "Failed to respond to swap request",
+        result.error || 'Failed to respond to swap request',
         400,
       );
     }
@@ -128,52 +128,52 @@ router.post("/:id/respond", async (req: Request, res: Response) => {
     return ResponseUtils.success(
       res,
       result.swap,
-      "Swap request responded successfully",
+      'Swap request responded successfully',
     );
   } catch (error) {
     if (error instanceof z.ZodError) {
       return ResponseUtils.validationError(
         res,
-        "Validation failed",
+        'Validation failed',
         error.issues
-          .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
-          .join(", "),
+          .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
+          .join(', '),
       );
     }
     return ResponseUtils.handleError(res, error);
   }
 });
 
-router.delete("/:id", async (req: Request, res: Response) => {
+router.delete('/:id', async (req: Request, res: Response) => {
   try {
-    const userId = req.headers["x-user-id"] as string;
+    const userId = req.headers['x-user-id'] as string;
 
     if (!userId) {
-      return ResponseUtils.unauthorized(res, "User ID required");
+      return ResponseUtils.unauthorized(res, 'User ID required');
     }
 
     const swap = await swapRepository.findById(req.params.id as string);
 
     if (!swap) {
-      return ResponseUtils.notFound(res, "Swap request not found");
+      return ResponseUtils.notFound(res, 'Swap request not found');
     }
 
-    if (swap.requesterId !== userId) {
+    if (swap.requester_id !== userId) {
       return ResponseUtils.forbidden(
         res,
-        "Not authorized to cancel this request",
+        'Not authorized to cancel this request',
       );
     }
 
-    if (swap.status !== "PENDING") {
-      return ResponseUtils.error(res, "Can only cancel pending requests", 400);
+    if (swap.status !== 'PENDING') {
+      return ResponseUtils.error(res, 'Can only cancel pending requests', 400);
     }
 
     await swapRepository.update(req.params.id as string, {
-      status: "CANCELLED",
+      status: 'CANCELLED',
     });
 
-    return ResponseUtils.noContent(res, "Swap request cancelled successfully");
+    return ResponseUtils.noContent(res, 'Swap request cancelled successfully');
   } catch (error) {
     return ResponseUtils.handleError(res, error);
   }

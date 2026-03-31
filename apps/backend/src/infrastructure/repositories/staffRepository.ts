@@ -1,95 +1,125 @@
-import { Prisma, PrismaClient, User, Availability } from "@prisma/client";
-import { prisma } from "../db";
+import { Knex } from 'knex';
+import db from '../database';
 
-export type StaffFilter = {
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  password_hash: string;
+  role: 'ADMIN' | 'MANAGER' | 'STAFF';
+  timezone: string;
+  desired_hours: number;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface Availability {
+  id: string;
+  user_id: string;
+  day_of_week: number | null;
+  start_time: string;
+  end_time: string;
+  is_recurring: boolean;
+  specific_date: Date | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface StaffFilter {
   role?: string;
   locationId?: string;
   skillId?: string;
-};
-
-const staffSelect = {
-  id: true,
-  email: true,
-  name: true,
-  role: true,
-  timezone: true,
-  desiredHours: true,
-  createdAt: true,
-  skills: { include: { skill: true } },
-  locationCertifications: { include: { location: true } },
-};
+}
 
 export const staffRepository = {
-  findMany(filter?: StaffFilter): Promise<Omit<User, "passwordHash">[]> {
-    const where: Prisma.UserWhereInput = {};
-    if (filter?.role) where.role = filter.role;
-    if (filter?.locationId) {
-      where.locationCertifications = {
-        some: { locationId: filter.locationId },
-      };
+  findMany(filter?: StaffFilter): Promise<Omit<User, 'password_hash'>[]> {
+    let query = db('users')
+      .select(
+        'id',
+        'email',
+        'name',
+        'role',
+        'timezone',
+        'desired_hours',
+        'created_at',
+      )
+      .orderBy('name', 'asc');
+
+    if (filter?.role) {
+      query = query.where('role', filter.role);
     }
-    if (filter?.skillId) {
-      where.skills = { some: { skillId: filter.skillId } };
-    }
-    return prisma.user.findMany({
-      where,
-      select: staffSelect,
-      orderBy: { name: "asc" },
-    });
+
+    return query.then((rows) => rows);
   },
 
-  findById(id: string): Promise<Omit<User, "passwordHash"> | null> {
-    return prisma.user.findUnique({
-      where: { id },
-      select: {
-        ...staffSelect,
-        availability: true,
-        assignedShifts: {
-          include: {
-            shift: { include: { location: true } },
-          },
-        },
-      },
-    });
+  findById(id: string): Promise<Omit<User, 'password_hash'> | null> {
+    return db('users')
+      .where({ id })
+      .select(
+        'id',
+        'email',
+        'name',
+        'role',
+        'timezone',
+        'desired_hours',
+        'created_at',
+      )
+      .first()
+      .then((row) => row || null);
   },
 
   update(
     id: string,
     data: Partial<
-      Pick<User, "email" | "name" | "role" | "timezone" | "desiredHours">
+      Pick<User, 'email' | 'name' | 'role' | 'timezone' | 'desired_hours'>
     >,
-  ): Promise<Omit<User, "passwordHash">> {
-    return prisma.user.update({
-      where: { id },
-      data,
-      select: staffSelect,
-    });
+  ): Promise<Omit<User, 'password_hash'>> {
+    return db('users')
+      .where({ id })
+      .update({ ...data, updated_at: db.fn.now() })
+      .returning([
+        'id',
+        'email',
+        'name',
+        'role',
+        'timezone',
+        'desired_hours',
+        'created_at',
+      ])
+      .then((rows) => rows[0]);
   },
 
   addSkill(
     userId: string,
     skillId: string,
   ): Promise<{
-    userId: string;
-    skillId: string;
+    user_id: string;
+    skill_id: string;
     skill: { id: string; name: string };
   }> {
-    return prisma.userSkill.upsert({
-      where: { userId_skillId: { userId, skillId } },
-      create: { userId, skillId },
-      update: {},
-      include: { skill: true },
-    });
+    return db('user_skills')
+      .insert({ user_id: userId, skill_id: skillId })
+      .onConflict(['user_id', 'skill_id'])
+      .ignore()
+      .then(() =>
+        db('user_skills')
+          .where({ user_id: userId, skill_id: skillId })
+          .leftJoin('skills', 'user_skills.skill_id', 'skills.id')
+          .select(
+            'user_skills.user_id',
+            'user_skills.skill_id',
+            db.raw(
+              "JSON_BUILD_OBJECT('id', skills.id, 'name', skills.name) as skill",
+            ),
+          )
+          .first(),
+      );
   },
 
-  removeSkill(
-    userId: string,
-    skillId: string,
-  ): Promise<Prisma.UserSkillGetPayload<{ include: { skill: true } }>> {
-    return prisma.userSkill.delete({
-      where: { userId_skillId: { userId, skillId } },
-      include: { skill: true },
-    });
+  removeSkill(userId: string, skillId: string): Promise<number> {
+    return db('user_skills')
+      .where({ user_id: userId, skill_id: skillId })
+      .del();
   },
 
   addLocation(
@@ -97,52 +127,69 @@ export const staffRepository = {
     locationId: string,
     isManager?: boolean,
   ): Promise<{
-    userId: string;
-    locationId: string;
-    isManager: boolean;
+    user_id: string;
+    location_id: string;
+    is_manager: boolean;
     location: { id: string; name: string };
   }> {
-    return prisma.userLocation.upsert({
-      where: { userId_locationId: { userId, locationId } },
-      create: { userId, locationId, isManager: isManager || false },
-      update: { isManager },
-      include: { location: true },
-    });
+    return db('user_locations')
+      .insert({
+        user_id: userId,
+        location_id: locationId,
+        is_manager: isManager || false,
+      })
+      .onConflict(['user_id', 'location_id'])
+      .merge({ is_manager: isManager })
+      .then(() =>
+        db('user_locations')
+          .where({ user_id: userId, location_id: locationId })
+          .leftJoin('locations', 'user_locations.location_id', 'locations.id')
+          .select(
+            'user_locations.user_id',
+            'user_locations.location_id',
+            'user_locations.is_manager',
+            db.raw(
+              "JSON_BUILD_OBJECT('id', locations.id, 'name', locations.name) as location",
+            ),
+          )
+          .first(),
+      );
   },
 
-  removeLocation(
-    userId: string,
-    locationId: string,
-  ): Promise<Prisma.UserLocationGetPayload<{ include: { location: true } }>> {
-    return prisma.userLocation.delete({
-      where: { userId_locationId: { userId, locationId } },
-      include: { location: true },
-    });
+  removeLocation(userId: string, locationId: string): Promise<number> {
+    return db('user_locations')
+      .where({ user_id: userId, location_id: locationId })
+      .del();
   },
 
   addAvailability(
     userId: string,
     data: {
-      dayOfWeek: number;
-      startTime: string;
-      endTime: string;
-      specificDate?: string | null;
+      day_of_week?: number;
+      start_time: string;
+      end_time: string;
+      is_recurring?: boolean;
+      specific_date?: string | null;
     },
   ): Promise<Availability> {
-    return prisma.availability.create({
-      data: {
-        userId,
-        ...data,
-        specificDate: data.specificDate ? new Date(data.specificDate) : null,
-      },
-    });
+    return db('availability')
+      .insert({
+        user_id: userId,
+        day_of_week: data.day_of_week,
+        start_time: data.start_time,
+        end_time: data.end_time,
+        is_recurring: data.is_recurring ?? true,
+        specific_date: data.specific_date ? new Date(data.specific_date) : null,
+      })
+      .returning('*')
+      .then((rows) => rows[0]);
   },
 
-  deleteAvailability(id: string): Promise<Availability> {
-    return prisma.availability.delete({ where: { id } });
+  deleteAvailability(id: string): Promise<number> {
+    return db('availability').where({ id }).del();
   },
 
-  getPrismaClient(): PrismaClient {
-    return prisma;
+  getKnex(): Knex {
+    return db;
   },
 };

@@ -1,54 +1,48 @@
-import type { SwapRequest } from "@prisma/client";
-import { PrismaClient } from "@prisma/client";
-import { CONSTRAINTS } from "@shift-sync/shared";
-import dayjs from "dayjs";
-import { createAuditLog } from "./auditLog";
+import { Knex } from 'knex';
+import { CONSTRAINTS } from '@shift-sync/shared';
+import dayjs from 'dayjs';
+import { createAuditLog } from './auditLog';
+import { db } from '../infrastructure/database';
 
 interface RequestSwapParams {
-  db: PrismaClient;
   shiftId: string;
   requesterId: string;
   targetId?: string;
 }
 
 export async function requestSwap({
-  db,
   shiftId,
   requesterId,
   targetId,
 }: RequestSwapParams): Promise<{
   success: boolean;
-  swap?: SwapRequest;
+  swap?: unknown;
   error?: string;
 }> {
-  // Check pending request count
-  const pendingCount = await db.swapRequest.count({
-    where: {
-      OR: [
-        { requesterId, status: { in: ["PENDING", "ACCEPTED"] } },
-        { targetId: requesterId, status: { in: ["PENDING", "ACCEPTED"] } },
-      ],
-    },
-  });
+  const pendingCount = await db('swap_requests')
+    .where(function () {
+      this.where('requester_id', requesterId)
+        .whereIn('status', ['PENDING', 'ACCEPTED'])
+        .orWhere('target_id', requesterId)
+        .whereIn('status', ['PENDING', 'ACCEPTED']);
+    })
+    .count('*')
+    .first();
 
-  if (pendingCount >= CONSTRAINTS.MAX_PENDING_SWAPS) {
+  if (pendingCount && Number(pendingCount.count) >= CONSTRAINTS.MAX_PENDING_SWAPS) {
     return {
       success: false,
       error: `Maximum ${CONSTRAINTS.MAX_PENDING_SWAPS} pending swap/drop requests allowed`,
     };
   }
 
-  // Get shift to check timing
-  const shift = await db.shift.findUnique({
-    where: { id: shiftId },
-  });
+  const shift = await db('shifts').where({ id: shiftId }).first();
 
   if (!shift) {
-    return { success: false, error: "Shift not found" };
+    return { success: false, error: 'Shift not found' };
   }
 
-  // Check if drop request (no target) is within expiry window
-  const hoursUntilShift = dayjs(shift.startTime).diff(dayjs(), "hour");
+  const hoursUntilShift = dayjs(shift.start_time).diff(dayjs(), 'hour');
 
   if (!targetId && hoursUntilShift < CONSTRAINTS.DROP_EXPIRY_HOURS) {
     return {
@@ -57,31 +51,30 @@ export async function requestSwap({
     };
   }
 
-  // Check if requester is assigned to this shift
-  const currentAssignment = await db.shiftAssignment.findFirst({
-    where: { shiftId, staffId: requesterId },
-  });
+  const currentAssignment = await db('shift_assignments')
+    .where({ shift_id: shiftId, staff_id: requesterId })
+    .first();
 
   if (!currentAssignment) {
-    return { success: false, error: "You are not assigned to this shift" };
+    return { success: false, error: 'You are not assigned to this shift' };
   }
 
-  // Create swap request
   try {
-    const swap = await db.$transaction(async (tx) => {
-      const newSwap = await tx.swapRequest.create({
-        data: {
-          shiftId,
-          requesterId,
-          targetId: targetId || null,
-          status: "PENDING",
-        },
-      });
+    const swap = await db.transaction(async (trx: Knex.Transaction) => {
+      const [newSwap] = await trx('swap_requests')
+        .insert({
+          shift_id: shiftId,
+          requester_id: requesterId,
+          target_id: targetId || null,
+          type: targetId ? 'SWAP' : 'DROP',
+          status: 'PENDING',
+        })
+        .returning('*');
 
-      await createAuditLog(tx, {
+      await createAuditLog(trx, {
         userId: requesterId,
-        action: targetId ? "REQUEST_SWAP" : "REQUEST_DROP",
-        entityType: "SwapRequest",
+        action: targetId ? 'REQUEST_SWAP' : 'REQUEST_DROP',
+        entityType: 'SwapRequest',
         entityId: newSwap.id,
         newValue: targetId ? { shiftId, targetId } : { shiftId },
       });
@@ -91,6 +84,6 @@ export async function requestSwap({
 
     return { success: true, swap };
   } catch {
-    return { success: false, error: "Failed to create swap request" };
+    return { success: false, error: 'Failed to create swap request' };
   }
 }
