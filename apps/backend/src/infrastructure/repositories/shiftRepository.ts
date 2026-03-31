@@ -10,6 +10,7 @@ export interface Shift {
   headcount: number;
   status: 'DRAFT' | 'PUBLISHED' | 'CANCELLED';
   published_at: Date | null;
+  version: number;
   created_at: Date;
   updated_at: Date;
 }
@@ -36,6 +37,12 @@ export interface ShiftFilter {
   endDate?: Date;
 }
 
+interface ShiftVersionCheck {
+  id: string;
+  version: number;
+  status: string;
+}
+
 const shiftSelect = [
   'shifts.id',
   'shifts.location_id',
@@ -45,13 +52,19 @@ const shiftSelect = [
   'shifts.headcount',
   'shifts.status',
   'shifts.published_at',
+  'shifts.version',
   'shifts.created_at',
   'shifts.updated_at',
 ];
 
+function getDb(trx?: Knex.Transaction): Knex {
+  return trx || db;
+}
+
 export const shiftRepository = {
-  findMany(filter?: ShiftFilter): Promise<ShiftWithRelations[]> {
-    let query = db('shifts')
+  findMany(filter?: ShiftFilter, trx?: Knex.Transaction): Promise<ShiftWithRelations[]> {
+    const queryDb = getDb(trx);
+    let query = queryDb('shifts')
       .select(shiftSelect)
       .leftJoin('locations', 'shifts.location_id', 'locations.id')
       .leftJoin(
@@ -93,8 +106,9 @@ export const shiftRepository = {
     ) as Promise<ShiftWithRelations[]>;
   },
 
-  findById(id: string): Promise<ShiftWithRelations | null> {
-    return db('shifts')
+  findById(id: string, trx?: Knex.Transaction): Promise<ShiftWithRelations | null> {
+    const queryDb = getDb(trx);
+    return queryDb('shifts')
       .select(shiftSelect)
       .leftJoin('locations', 'shifts.location_id', 'locations.id')
       .leftJoin(
@@ -142,21 +156,37 @@ export const shiftRepository = {
       }) as Promise<ShiftWithRelations | null>;
   },
 
-  create(data: {
-    location_id: string;
-    required_skill_id: string;
-    start_time: Date;
-    end_time: Date;
-    headcount: number;
-    status: Shift['status'];
-  }): Promise<ShiftWithRelations> {
-    return db('shifts')
-      .insert(data)
-      .returning('*')
-      .then((rows) => this.findById(rows[0].id)) as Promise<ShiftWithRelations>;
+  findVersion(id: string, trx?: Knex.Transaction): Promise<ShiftVersionCheck | null> {
+    const queryDb = getDb(trx);
+    return queryDb('shifts')
+      .where({ id })
+      .select('id', 'version', 'status')
+      .first()
+      .then((row) => row || null);
   },
 
-  update(
+  async create(
+    data: {
+      location_id: string;
+      required_skill_id: string;
+      start_time: Date;
+      end_time: Date;
+      headcount: number;
+      status: Shift['status'];
+    },
+    trx?: Knex.Transaction,
+  ): Promise<ShiftWithRelations> {
+    const queryDb = getDb(trx);
+    const rows = await queryDb('shifts')
+      .insert({
+        ...data,
+        version: 1,
+      })
+      .returning('*');
+    return this.findById(rows[0].id, trx) as Promise<ShiftWithRelations>;
+  },
+
+  async update(
     id: string,
     data: Partial<{
       start_time: Date;
@@ -167,24 +197,88 @@ export const shiftRepository = {
       status: Shift['status'];
       published_at: Date;
     }>,
+    trx?: Knex.Transaction,
   ): Promise<ShiftWithRelations> {
-    return db('shifts')
+    const queryDb = getDb(trx);
+    await queryDb('shifts')
       .where({ id })
-      .update({ ...data, updated_at: db.fn.now() })
-      .returning('*')
-      .then(() => this.findById(id)) as Promise<ShiftWithRelations>;
+      .update({ ...data, updated_at: queryDb.fn.now() })
+      .returning('*');
+    return this.findById(id, trx) as Promise<ShiftWithRelations>;
   },
 
-  delete(id: string): Promise<number> {
-    return db('shifts').where({ id }).del();
+  async updateWithVersion(
+    id: string,
+    data: Partial<{
+      start_time: Date;
+      end_time: Date;
+      location_id: string;
+      required_skill_id: string;
+      headcount: number;
+      status: Shift['status'];
+      published_at: Date;
+    }>,
+    expectedVersion: number,
+    trx: Knex.Transaction,
+  ): Promise<{ success: boolean; error?: string; shift?: ShiftWithRelations }> {
+    const current = await trx('shifts')
+      .where({ id })
+      .select('id', 'version', 'status')
+      .first();
+
+    if (!current) {
+      return { success: false, error: 'Shift not found' };
+    }
+
+    if (current.version !== expectedVersion) {
+      return { success: false, error: 'CONFLICT: Shift was modified by another user' };
+    }
+
+    await trx('shifts')
+      .where({ id })
+      .update({
+        ...data,
+        version: current.version + 1,
+        updated_at: trx.fn.now(),
+      })
+      .returning('*');
+
+    const shift = await this.findById(id, trx);
+    return { success: true, shift: shift as ShiftWithRelations };
   },
 
-  count(where?: Record<string, unknown>): Promise<number> {
-    const query = where ? db('shifts').where(where) : db('shifts');
+  delete(id: string, trx?: Knex.Transaction): Promise<number> {
+    const queryDb = getDb(trx);
+    return queryDb('shifts').where({ id }).del();
+  },
+
+  deleteWithVersion(
+    id: string,
+    expectedVersion: number,
+    trx: Knex.Transaction,
+  ): Promise<{ success: boolean; error?: string }> {
+    return trx('shifts')
+      .where({ id, version: expectedVersion })
+      .del()
+      .then((count) => {
+        if (count === 0) {
+          return { success: false, error: 'CONFLICT: Shift was modified by another user' };
+        }
+        return { success: true };
+      });
+  },
+
+  count(where?: Record<string, unknown>, trx?: Knex.Transaction): Promise<number> {
+    const queryDb = getDb(trx);
+    const query = where ? queryDb('shifts').where(where) : queryDb('shifts');
     return query.count('*').then((r) => Number(r[0].count));
   },
 
   getKnex(): Knex {
     return db;
+  },
+
+  getDb(trx?: Knex.Transaction): Knex {
+    return getDb(trx);
   },
 };

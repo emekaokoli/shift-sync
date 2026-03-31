@@ -1,5 +1,5 @@
 import { knex } from 'knex';
-import config from '../../../knexfile';
+import config from '../../../knexfile.js';
 
 type ConfigKeys = keyof typeof config;
 
@@ -12,3 +12,4 @@ const environment: ConfigKeys =
 const database = knex(config[environment]);
 
 export default database;
+export const db = database;

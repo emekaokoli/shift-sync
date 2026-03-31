@@ -2,7 +2,7 @@ import { Knex } from 'knex';
 import { CONSTRAINTS } from '@shift-sync/shared';
 import dayjs from 'dayjs';
 import { createAuditLog } from './auditLog';
-import { db } from '../infrastructure/database';
+import db from '../infrastructure/database';
 
 interface RequestSwapParams {
   shiftId: string;
@@ -20,12 +20,8 @@ export async function requestSwap({
   error?: string;
 }> {
   const pendingCount = await db('swap_requests')
-    .where(function () {
-      this.where('requester_id', requesterId)
-        .whereIn('status', ['PENDING', 'ACCEPTED'])
-        .orWhere('target_id', requesterId)
-        .whereIn('status', ['PENDING', 'ACCEPTED']);
-    })
+    .where('requester_id', requesterId)
+    .whereIn('status', ['PENDING', 'ACCEPTED'])
     .count('*')
     .first();
 

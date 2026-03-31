@@ -1,7 +1,7 @@
 import { Knex } from 'knex';
 import { validateAssignment } from '../domain/engine';
 import { createAuditLog } from './auditLog';
-import { db } from '../infrastructure/database';
+import db from '../infrastructure/database';
 
 interface AssignShiftParams {
   shiftId: string;

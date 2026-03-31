@@ -1,7 +1,7 @@
 import { Knex } from 'knex';
 import { canTransition } from '../domain/swap';
 import { createAuditLog } from './auditLog';
-import { db } from '../infrastructure/database';
+import db from '../infrastructure/database';
 
 interface ApproveSwapParams {
   swapId: string;

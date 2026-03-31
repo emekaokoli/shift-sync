@@ -9,8 +9,15 @@ export interface User {
   role: 'ADMIN' | 'MANAGER' | 'STAFF';
   timezone: string;
   desired_hours: number;
+  version: number;
   created_at: Date;
   updated_at: Date;
+}
+
+export interface UserVersionCheck {
+  id: string;
+  version: number;
+  role: string;
 }
 
 export interface Availability {
@@ -31,9 +38,14 @@ export interface StaffFilter {
   skillId?: string;
 }
 
+function getDb(trx?: Knex.Transaction): Knex {
+  return trx || db;
+}
+
 export const staffRepository = {
-  findMany(filter?: StaffFilter): Promise<Omit<User, 'password_hash'>[]> {
-    let query = db('users')
+  findMany(filter?: StaffFilter, trx?: Knex.Transaction): Promise<Omit<User, 'password_hash'>[]> {
+    const queryDb = getDb(trx);
+    let query = queryDb('users')
       .select(
         'id',
         'email',
@@ -52,8 +64,9 @@ export const staffRepository = {
     return query.then((rows) => rows);
   },
 
-  findById(id: string): Promise<Omit<User, 'password_hash'> | null> {
-    return db('users')
+  findById(id: string, trx?: Knex.Transaction): Promise<Omit<User, 'password_hash'> | null> {
+    const queryDb = getDb(trx);
+    return queryDb('users')
       .where({ id })
       .select(
         'id',
@@ -68,15 +81,26 @@ export const staffRepository = {
       .then((row) => row || null);
   },
 
-  update(
+  findVersion(id: string, trx?: Knex.Transaction): Promise<UserVersionCheck | null> {
+    const queryDb = getDb(trx);
+    return queryDb('users')
+      .where({ id })
+      .select('id', 'version', 'role')
+      .first()
+      .then((row) => row || null);
+  },
+
+  async update(
     id: string,
     data: Partial<
       Pick<User, 'email' | 'name' | 'role' | 'timezone' | 'desired_hours'>
     >,
+    trx?: Knex.Transaction,
   ): Promise<Omit<User, 'password_hash'>> {
-    return db('users')
+    const queryDb = getDb(trx);
+    const rows = await queryDb('users')
       .where({ id })
-      .update({ ...data, updated_at: db.fn.now() })
+      .update({ ...data, updated_at: queryDb.fn.now() })
       .returning([
         'id',
         'email',
@@ -85,84 +109,201 @@ export const staffRepository = {
         'timezone',
         'desired_hours',
         'created_at',
-      ])
-      .then((rows) => rows[0]);
+      ]);
+    return rows[0];
   },
 
-  addSkill(
+  async updateWithVersion(
+    id: string,
+    data: Partial<
+      Pick<User, 'email' | 'name' | 'role' | 'timezone' | 'desired_hours'>
+    >,
+    expectedVersion: number,
+    trx: Knex.Transaction,
+  ): Promise<{ success: boolean; error?: string; user?: Omit<User, 'password_hash'> }> {
+    const current = await trx('users')
+      .where({ id })
+      .select('id', 'version')
+      .first();
+
+    if (!current) {
+      return { success: false, error: 'User not found' };
+    }
+
+    if (current.version !== expectedVersion) {
+      return { success: false, error: 'CONFLICT: User was modified by another user' };
+    }
+
+    const rows = await trx('users')
+      .where({ id })
+      .update({
+        ...data,
+        version: current.version + 1,
+        updated_at: trx.fn.now(),
+      })
+      .returning([
+        'id',
+        'email',
+        'name',
+        'role',
+        'timezone',
+        'desired_hours',
+        'created_at',
+      ]);
+
+    return { success: true, user: rows[0] };
+  },
+
+  async addSkill(
     userId: string,
     skillId: string,
+    trx?: Knex.Transaction,
   ): Promise<{
     user_id: string;
     skill_id: string;
     skill: { id: string; name: string };
   }> {
-    return db('user_skills')
+    const queryDb = getDb(trx);
+    await queryDb('user_skills')
       .insert({ user_id: userId, skill_id: skillId })
       .onConflict(['user_id', 'skill_id'])
-      .ignore()
-      .then(() =>
-        db('user_skills')
-          .where({ user_id: userId, skill_id: skillId })
-          .leftJoin('skills', 'user_skills.skill_id', 'skills.id')
-          .select(
-            'user_skills.user_id',
-            'user_skills.skill_id',
-            db.raw(
-              "JSON_BUILD_OBJECT('id', skills.id, 'name', skills.name) as skill",
-            ),
-          )
-          .first(),
-      );
+      .ignore();
+
+    return queryDb('user_skills')
+      .where({ user_id: userId, skill_id: skillId })
+      .leftJoin('skills', 'user_skills.skill_id', 'skills.id')
+      .select(
+        'user_skills.user_id',
+        'user_skills.skill_id',
+        db.raw(
+          "JSON_BUILD_OBJECT('id', skills.id, 'name', skills.name) as skill",
+        ),
+      )
+      .first()
+      .then((row: Record<string, unknown>) => ({
+        user_id: row.user_id as string,
+        skill_id: row.skill_id as string,
+        skill: row.skill as { id: string; name: string },
+      }));
   },
 
-  removeSkill(userId: string, skillId: string): Promise<number> {
-    return db('user_skills')
+  async addSkillWithValidation(
+    userId: string,
+    skillId: string,
+    trx: Knex.Transaction,
+  ): Promise<{ success: boolean; error?: string }> {
+    const [user, skill] = await Promise.all([
+      trx('users').where({ id: userId }).first(),
+      trx('skills').where({ id: skillId }).first(),
+    ]);
+
+    if (!user) {
+      return { success: false, error: 'User not found' };
+    }
+
+    if (!skill) {
+      return { success: false, error: 'Skill not found' };
+    }
+
+    await trx('user_skills')
+      .insert({ user_id: userId, skill_id: skillId })
+      .onConflict(['user_id', 'skill_id'])
+      .ignore();
+
+    return { success: true };
+  },
+
+  removeSkill(userId: string, skillId: string, trx?: Knex.Transaction): Promise<number> {
+    const queryDb = getDb(trx);
+    return queryDb('user_skills')
       .where({ user_id: userId, skill_id: skillId })
       .del();
   },
 
-  addLocation(
+  async addLocation(
     userId: string,
     locationId: string,
     isManager?: boolean,
+    trx?: Knex.Transaction,
   ): Promise<{
     user_id: string;
     location_id: string;
     is_manager: boolean;
     location: { id: string; name: string };
   }> {
-    return db('user_locations')
+    const queryDb = getDb(trx);
+    await queryDb('user_locations')
       .insert({
         user_id: userId,
         location_id: locationId,
         is_manager: isManager || false,
       })
       .onConflict(['user_id', 'location_id'])
-      .merge({ is_manager: isManager })
-      .then(() =>
-        db('user_locations')
-          .where({ user_id: userId, location_id: locationId })
-          .leftJoin('locations', 'user_locations.location_id', 'locations.id')
-          .select(
-            'user_locations.user_id',
-            'user_locations.location_id',
-            'user_locations.is_manager',
-            db.raw(
-              "JSON_BUILD_OBJECT('id', locations.id, 'name', locations.name) as location",
-            ),
-          )
-          .first(),
-      );
+      .merge({ is_manager: isManager });
+
+    return queryDb('user_locations')
+      .where({ user_id: userId, location_id: locationId })
+      .leftJoin('locations', 'user_locations.location_id', 'locations.id')
+      .select(
+        'user_locations.user_id',
+        'user_locations.location_id',
+        'user_locations.is_manager',
+        db.raw(
+          "JSON_BUILD_OBJECT('id', locations.id, 'name', locations.name) as location",
+        ),
+      )
+      .first()
+      .then((row: Record<string, unknown>) => ({
+        user_id: row.user_id as string,
+        location_id: row.location_id as string,
+        is_manager: row.is_manager as boolean,
+        location: row.location as { id: string; name: string },
+      }));
   },
 
-  removeLocation(userId: string, locationId: string): Promise<number> {
-    return db('user_locations')
+  async addLocationWithValidation(
+    userId: string,
+    locationId: string,
+    isManager: boolean,
+    trx: Knex.Transaction,
+  ): Promise<{ success: boolean; error?: string }> {
+    const [user, location] = await Promise.all([
+      trx('users').where({ id: userId }).first(),
+      trx('locations').where({ id: locationId }).first(),
+    ]);
+
+    if (!user) {
+      return { success: false, error: 'User not found' };
+    }
+
+    if (!location) {
+      return { success: false, error: 'Location not found' };
+    }
+
+    if (isManager && user.role !== 'MANAGER' && user.role !== 'ADMIN') {
+      return { success: false, error: 'Only managers can be assigned to locations as managers' };
+    }
+
+    await trx('user_locations')
+      .insert({
+        user_id: userId,
+        location_id: locationId,
+        is_manager: isManager,
+      })
+      .onConflict(['user_id', 'location_id'])
+      .merge({ is_manager: isManager });
+
+    return { success: true };
+  },
+
+  removeLocation(userId: string, locationId: string, trx?: Knex.Transaction): Promise<number> {
+    const queryDb = getDb(trx);
+    return queryDb('user_locations')
       .where({ user_id: userId, location_id: locationId })
       .del();
   },
 
-  addAvailability(
+  async addAvailability(
     userId: string,
     data: {
       day_of_week?: number;
@@ -171,8 +312,10 @@ export const staffRepository = {
       is_recurring?: boolean;
       specific_date?: string | null;
     },
+    trx?: Knex.Transaction,
   ): Promise<Availability> {
-    return db('availability')
+    const queryDb = getDb(trx);
+    const rows = await queryDb('availability')
       .insert({
         user_id: userId,
         day_of_week: data.day_of_week,
@@ -181,15 +324,59 @@ export const staffRepository = {
         is_recurring: data.is_recurring ?? true,
         specific_date: data.specific_date ? new Date(data.specific_date) : null,
       })
-      .returning('*')
-      .then((rows) => rows[0]);
+      .returning('*');
+    return rows[0];
   },
 
-  deleteAvailability(id: string): Promise<number> {
-    return db('availability').where({ id }).del();
+  async addAvailabilityWithValidation(
+    userId: string,
+    data: {
+      day_of_week?: number;
+      start_time: string;
+      end_time: string;
+      is_recurring?: boolean;
+      specific_date?: string | null;
+    },
+    trx: Knex.Transaction,
+  ): Promise<{ success: boolean; error?: string; availability?: Availability }> {
+    const user = await trx('users').where({ id: userId }).first();
+
+    if (!user) {
+      return { success: false, error: 'User not found' };
+    }
+
+    if (data.start_time >= data.end_time) {
+      return { success: false, error: 'Start time must be before end time' };
+    }
+
+    if (data.day_of_week !== undefined && (data.day_of_week < 0 || data.day_of_week > 6)) {
+      return { success: false, error: 'Day of week must be between 0 and 6' };
+    }
+
+    const rows = await trx('availability')
+      .insert({
+        user_id: userId,
+        day_of_week: data.day_of_week,
+        start_time: data.start_time,
+        end_time: data.end_time,
+        is_recurring: data.is_recurring ?? true,
+        specific_date: data.specific_date ? new Date(data.specific_date) : null,
+      })
+      .returning('*');
+
+    return { success: true, availability: rows[0] };
+  },
+
+  deleteAvailability(id: string, trx?: Knex.Transaction): Promise<number> {
+    const queryDb = getDb(trx);
+    return queryDb('availability').where({ id }).del();
   },
 
   getKnex(): Knex {
     return db;
+  },
+
+  getDb(trx?: Knex.Transaction): Knex {
+    return getDb(trx);
   },
 };

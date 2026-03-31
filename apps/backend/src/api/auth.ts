@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { hashPassword, verifyPassword, signToken, verifyToken, extractToken } from "../infrastructure/auth";
-import { db } from "../infrastructure/database";
+import db from "../infrastructure/database";
 import { ResponseUtils } from "../infrastructure/response";
 
 const router: Router = Router();

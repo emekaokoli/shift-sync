@@ -1,6 +1,6 @@
 import { Knex } from 'knex';
 import { createAuditLog } from './auditLog';
-import { db } from '../infrastructure/database';
+import db from '../infrastructure/database';
 
 interface UpdateShiftParams {
   shiftId: string;

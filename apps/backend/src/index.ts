@@ -9,7 +9,7 @@ import shiftsRouter from "./api/shifts";
 import skillsRouter from "./api/skills";
 import staffRouter from "./api/staff";
 import swapsRouter from "./api/swaps";
-import { db } from "./infrastructure/database";
+import db from "./infrastructure/database";
 import { logger } from "./infrastructure/logger";
 import { apiLimiter } from "./infrastructure/rateLimit";
 import { setupSocketIO } from "./infrastructure/socket";

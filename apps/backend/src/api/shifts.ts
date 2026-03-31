@@ -10,7 +10,7 @@ import { updateShift } from '../application/updateShift';
 import { suggestAlternatives, validateAssignment } from '../domain/engine';
 import { shiftRepository } from '../infrastructure/repositories';
 import { ResponseUtils } from '../infrastructure/response';
-import { db } from '../infrastructure/database';
+import db from '../infrastructure/database';
 
 const router: Router = Router();
 
