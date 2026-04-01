@@ -1,9 +1,6 @@
 import type { Knex } from 'knex';
-import type {
-  Availability as SharedAvailability,
-  Shift as SharedShift,
-} from "@shift-sync/shared";
-import { ValidationResult, Violation } from "@shift-sync/shared";
+import type { Availability as SharedAvailability, Shift as SharedShift } from '@shift-sync/shared';
+import { ValidationResult, Violation } from '@shift-sync/shared';
 import {
   checkAvailability,
   checkConsecutiveDays,
@@ -12,7 +9,7 @@ import {
   checkNoOverlap,
   checkOvertime,
   checkSkillMatch,
-} from "../rules";
+} from '../rules';
 
 interface ValidateAssignmentParams {
   db: Knex;
@@ -40,21 +37,19 @@ function normalizeAvailability(av: {
   };
 }
 
-function normalizeShift(
-  shift: { 
-    id: string;
-    location_id: string;
-    start_time: Date;
-    end_time: Date;
-    required_skill_id: string | null;
-    headcount: number;
-    status: string;
-    published_at: Date | null;
-    created_at: Date;
-    updated_at: Date;
-    timezone: string;
-  },
-): SharedShift & { location: { timezone: string } } {
+function normalizeShift(shift: {
+  id: string;
+  location_id: string;
+  start_time: Date;
+  end_time: Date;
+  required_skill_id: string | null;
+  headcount: number;
+  status: string;
+  published_at: Date | null;
+  created_at: Date;
+  updated_at: Date;
+  timezone: string;
+}): SharedShift & { location: { timezone: string } } {
   return {
     id: shift.id,
     locationId: shift.location_id,
@@ -62,7 +57,7 @@ function normalizeShift(
     endTime: shift.end_time.toISOString(),
     requiredSkillId: shift.required_skill_id || '',
     headcount: shift.headcount,
-    status: shift.status as SharedShift["status"],
+    status: shift.status as SharedShift['status'],
     publishedAt: shift.published_at?.toISOString() ?? null,
     createdAt: shift.created_at.toISOString(),
     updatedAt: shift.updated_at.toISOString(),
@@ -80,16 +75,11 @@ export async function validateAssignment({
   const violations: Violation[] = [];
 
   const [staffRows, shiftRows, assignmentRows] = await Promise.all([
-    db('users')
-      .where('id', staffId)
-      .first(),
+    db('users').where('id', staffId).first(),
     db('shifts')
       .join('locations', 'shifts.location_id', 'locations.id')
       .where('shifts.id', shiftId)
-      .select(
-        'shifts.*',
-        'locations.timezone'
-      )
+      .select('shifts.*', 'locations.timezone')
       .first(),
     db('shift_assignments')
       .join('shifts', 'shift_assignments.shift_id', 'shifts.id')
@@ -112,43 +102,45 @@ export async function validateAssignment({
       ),
   ]);
 
-  const staff = staffRows ? {
-    id: staffRows.id,
-    name: staffRows.name,
-    role: staffRows.role,
-    skills: await db('user_skills')
-      .join('skills', 'user_skills.skill_id', 'skills.id')
-      .where('user_skills.user_id', staffId)
-      .select('skills.id', 'skills.name'),
-    locationCertifications: await db('user_locations')
-      .where('user_id', staffId)
-      .select('location_id'),
-    availability: await db('availability')
-      .where('user_id', staffId)
-      .select(),
-  } : null;
+  const staff = staffRows
+    ? {
+        id: staffRows.id,
+        name: staffRows.name,
+        role: staffRows.role,
+        skills: await db('user_skills')
+          .join('skills', 'user_skills.skill_id', 'skills.id')
+          .where('user_skills.user_id', staffId)
+          .select('skills.id', 'skills.name'),
+        locationCertifications: await db('user_locations')
+          .where('user_id', staffId)
+          .select('location_id'),
+        availability: await db('availability').where('user_id', staffId).select(),
+      }
+    : null;
 
-  const shift = shiftRows ? {
-    id: shiftRows.id,
-    locationId: shiftRows.location_id,
-    startTime: shiftRows.start_time,
-    endTime: shiftRows.end_time,
-    requiredSkillId: shiftRows.required_skill_id,
-    headcount: shiftRows.headcount,
-    status: shiftRows.status,
-    publishedAt: shiftRows.published_at,
-    createdAt: shiftRows.created_at,
-    updatedAt: shiftRows.updated_at,
-    location: { timezone: shiftRows.timezone },
-  } : null;
+  const shift = shiftRows
+    ? {
+        id: shiftRows.id,
+        locationId: shiftRows.location_id,
+        startTime: shiftRows.start_time,
+        endTime: shiftRows.end_time,
+        requiredSkillId: shiftRows.required_skill_id,
+        headcount: shiftRows.headcount,
+        status: shiftRows.status,
+        publishedAt: shiftRows.published_at,
+        createdAt: shiftRows.created_at,
+        updatedAt: shiftRows.updated_at,
+        location: { timezone: shiftRows.timezone },
+      }
+    : null;
 
   if (!staff) {
     return {
       ok: false,
       violations: [
         {
-          code: "STAFF_NOT_FOUND",
-          message: "Staff member not found",
+          code: 'STAFF_NOT_FOUND',
+          message: 'Staff member not found',
           details: { staffId },
         },
       ],
@@ -160,8 +152,8 @@ export async function validateAssignment({
       ok: false,
       violations: [
         {
-          code: "SHIFT_NOT_FOUND",
-          message: "Shift not found",
+          code: 'SHIFT_NOT_FOUND',
+          message: 'Shift not found',
           details: { shiftId },
         },
       ],
@@ -198,50 +190,38 @@ export async function validateAssignment({
     timezone: shift.location.timezone,
   });
 
-  const noOverlapViolation = checkNoOverlap(
-    normalizedAssignments,
-    normalizedShift,
-  );
+  const noOverlapViolation = checkNoOverlap(normalizedAssignments, normalizedShift);
   if (noOverlapViolation) violations.push(noOverlapViolation);
 
-  const minRestViolation = checkMinRest(
-    normalizedAssignments,
-    normalizedShift,
-  );
+  const minRestViolation = checkMinRest(normalizedAssignments, normalizedShift);
   if (minRestViolation) violations.push(minRestViolation);
 
   const skillViolation = checkSkillMatch(
-    staff.skills.map(s => ({ skill: s })),
-    shift.requiredSkillId,
+    staff.skills.map((s) => ({ skill: s })),
+    shift.requiredSkillId
   );
   if (skillViolation) violations.push(skillViolation);
 
   const locationViolation = checkLocationCertification(
     staff.locationCertifications,
-    shift.locationId,
+    shift.locationId
   );
   if (locationViolation) violations.push(locationViolation);
 
-  const availabilityViolation = checkAvailability(
-    staff.availability.map(normalizeAvailability),
-    {
-      startTime: shift.startTime.toISOString(),
-      endTime: shift.endTime.toISOString(),
-      location: shift.location,
-    },
-  );
+  const availabilityViolation = checkAvailability(staff.availability.map(normalizeAvailability), {
+    startTime: shift.startTime.toISOString(),
+    endTime: shift.endTime.toISOString(),
+    location: shift.location,
+  });
   if (availabilityViolation) violations.push(availabilityViolation);
 
   const { violation: consecutiveViolation } = checkConsecutiveDays(
     normalizedAssignments,
-    normalizedShift,
+    normalizedShift
   );
   if (consecutiveViolation) violations.push(consecutiveViolation);
 
-  const overtimeViolations = checkOvertime(
-    normalizedAssignments,
-    normalizedShift,
-  );
+  const overtimeViolations = checkOvertime(normalizedAssignments, normalizedShift);
   violations.push(...overtimeViolations);
 
   return violations.length > 0 ? { ok: false, violations } : { ok: true };

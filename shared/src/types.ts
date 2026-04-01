@@ -12,6 +12,11 @@ export type SwapStatus =
 
 export type DropStatus = 'PENDING' | 'CLAIMED' | 'EXPIRED' | 'CANCELLED';
 
+export interface NotificationPreferences {
+  inApp: boolean;
+  email: boolean;
+}
+
 export interface User {
   id: string;
   email: string;
@@ -19,6 +24,7 @@ export interface User {
   role: Role;
   timezone: string;
   desiredHours: number;
+  notificationPreferences?: NotificationPreferences;
   locations?: { id: string; name: string; isManager: boolean }[];
   createdAt?: string;
   updatedAt?: string;

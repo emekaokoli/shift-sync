@@ -6,6 +6,8 @@ const queryKeys = {
   shifts: (params?: Record<string, string>) => ["shifts", params] as const,
   shift: (id: string) => ["shift", id] as const,
   myShifts: () => ["my-shifts"] as const,
+  currentShifts: (locationId?: string) => ["current-shifts", locationId] as const,
+  premiumStats: (params?: Record<string, string>) => ["premium-stats", params] as const,
 };
 
 export function useShifts(params?: { locationId?: string; status?: string; startDate?: string; endDate?: string }) {
@@ -123,5 +125,19 @@ export function useOvertimeStats(params?: { locationId?: string; weekStart?: str
   return useQuery({
     queryKey: ["overtime-stats", params],
     queryFn: () => shiftsApi.getOvertimeStats(params),
+  });
+}
+
+export function useCurrentShifts(locationId?: string) {
+  return useQuery({
+    queryKey: queryKeys.currentShifts(locationId),
+    queryFn: () => shiftsApi.getCurrent({ locationId }),
+  });
+}
+
+export function usePremiumStats(params?: { locationId?: string; startDate?: string; endDate?: string }) {
+  return useQuery({
+    queryKey: queryKeys.premiumStats(params),
+    queryFn: () => shiftsApi.getPremiumStats(params),
   });
 }

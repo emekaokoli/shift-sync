@@ -1,4 +1,4 @@
-import { SwapStatus, SWAP_STATUS } from "@shift-sync/shared";
+import { SwapStatus, SWAP_STATUS } from '@shift-sync/shared';
 
 const SWAP_TRANSITIONS: Record<SwapStatus, SwapStatus[]> = {
   PENDING: [SWAP_STATUS.ACCEPTED, SWAP_STATUS.CANCELLED],
@@ -15,7 +15,7 @@ export function canTransition(from: SwapStatus, to: SwapStatus): boolean {
 
 export function validateTransition(
   from: SwapStatus,
-  to: SwapStatus,
+  to: SwapStatus
 ): { valid: boolean; error?: string } {
   if (!canTransition(from, to)) {
     return {
@@ -31,9 +31,9 @@ export function getValidTransitions(status: SwapStatus): SwapStatus[] {
 }
 
 export function isTerminalStatus(status: SwapStatus): boolean {
-  return ["APPROVED", "REJECTED", "CANCELLED", "EXPIRED"].includes(status);
+  return ['APPROVED', 'REJECTED', 'CANCELLED', 'EXPIRED'].includes(status);
 }
 
 export function isActionableStatus(status: SwapStatus): boolean {
-  return ["PENDING", "ACCEPTED"].includes(status);
+  return ['PENDING', 'ACCEPTED'].includes(status);
 }

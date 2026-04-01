@@ -54,6 +54,12 @@ export async function seed(knex: Knex): Promise<void> {
         timezone: 'America/Chicago',
         cutoff_hours: 24,
       },
+      {
+        name: 'Coastal Eats - Mall',
+        address: '100 Mall Drive, City, ST 12345',
+        timezone: 'America/New_York',
+        cutoff_hours: 48,
+      },
     ])
     .returning('*');
 
@@ -128,6 +134,14 @@ export async function seed(knex: Knex): Promise<void> {
         timezone: 'America/New_York',
         desired_hours: 35,
       },
+      {
+        email: 'staff6@coastaleats.com',
+        name: 'Tom Garcia',
+        password_hash: passwordHash,
+        role: 'STAFF',
+        timezone: 'America/New_York',
+        desired_hours: 30,
+      },
     ])
     .returning('*');
 
@@ -148,6 +162,11 @@ export async function seed(knex: Knex): Promise<void> {
     {
       user_id: userMap['manager2@coastaleats.com'],
       location_id: locationMap['Coastal Eats - Airport'],
+      is_manager: true,
+    },
+    {
+      user_id: userMap['manager1@coastaleats.com'],
+      location_id: locationMap['Coastal Eats - Mall'],
       is_manager: true,
     },
   ]);
@@ -177,6 +196,11 @@ export async function seed(knex: Knex): Promise<void> {
     {
       user_id: userMap['staff5@coastaleats.com'],
       location_id: locationMap['Coastal Eats - Airport'],
+      is_manager: false,
+    },
+    {
+      user_id: userMap['staff6@coastaleats.com'],
+      location_id: locationMap['Coastal Eats - Mall'],
       is_manager: false,
     },
   ]);

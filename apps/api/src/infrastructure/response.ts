@@ -1,6 +1,6 @@
-import type { Response } from "express";
-import type { ApiResponse, PaginatedData } from "@shift-sync/shared";
-import { DomainError } from "./error";
+import type { Response } from 'express';
+import type { ApiResponse, PaginatedData } from '@shift-sync/shared';
+import { DomainError } from './error';
 
 export class ResponseUtils {
   private constructor() {
@@ -14,15 +14,10 @@ export class ResponseUtils {
     if (error instanceof Error) {
       return this.error(res, error.message, 500);
     }
-    return this.error(res, "Internal server error", 500);
+    return this.error(res, 'Internal server error', 500);
   }
 
-  static success<T>(
-    res: Response,
-    data: T,
-    message = "Success",
-    statusCode = 200,
-  ): Response {
+  static success<T>(res: Response, data: T, message = 'Success', statusCode = 200): Response {
     const response: ApiResponse<T> = {
       success: true,
       message,
@@ -31,12 +26,7 @@ export class ResponseUtils {
     return res.status(statusCode).json(response);
   }
 
-  static error(
-    res: Response,
-    message: string,
-    statusCode = 400,
-    error?: string,
-  ): Response {
+  static error(res: Response, message: string, statusCode = 400, error?: string): Response {
     const response: ApiResponse = {
       success: false,
       message,
@@ -51,12 +41,12 @@ export class ResponseUtils {
     page: number,
     limit: number,
     total: number,
-    message = "Success",
+    message = 'Success'
   ): Response {
     if (page < 1 || limit < 1) {
       return this.validationError(
         res,
-        "Invalid pagination parameters. Page and limit must be greater than 0.",
+        'Invalid pagination parameters. Page and limit must be greater than 0.'
       );
     }
 
@@ -80,49 +70,38 @@ export class ResponseUtils {
     return res.status(200).json(response);
   }
 
-  static created<T>(
-    res: Response,
-    data: T,
-    message = "Created successfully",
-  ): Response {
+  static created<T>(res: Response, data: T, message = 'Created successfully'): Response {
     return this.success(res, data, message, 201);
   }
 
-  static noContent(res: Response, message = "No content"): Response {
+  static noContent(res: Response, message = 'No content'): Response {
     return res.status(204).json({
       success: true,
       message,
     });
   }
 
-  static unauthorized(res: Response, message = "Unauthorized"): Response {
+  static unauthorized(res: Response, message = 'Unauthorized'): Response {
     return this.error(res, message, 401);
   }
 
-  static forbidden(res: Response, message = "Forbidden"): Response {
+  static forbidden(res: Response, message = 'Forbidden'): Response {
     return this.error(res, message, 403);
   }
 
-  static notFound(res: Response, message = "Not found"): Response {
+  static notFound(res: Response, message = 'Not found'): Response {
     return this.error(res, message, 404);
   }
 
-  static conflict(res: Response, message = "Conflict"): Response {
+  static conflict(res: Response, message = 'Conflict'): Response {
     return this.error(res, message, 409);
   }
 
-  static validationError(
-    res: Response,
-    message = "Validation error",
-    errors?: string,
-  ): Response {
+  static validationError(res: Response, message = 'Validation error', errors?: string): Response {
     return this.error(res, message, 422, errors);
   }
 
-  static internalError(
-    res: Response,
-    message = "Internal server error",
-  ): Response {
+  static internalError(res: Response, message = 'Internal server error'): Response {
     return this.error(res, message, 500);
   }
 }

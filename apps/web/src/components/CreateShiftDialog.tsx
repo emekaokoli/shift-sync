@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
+import type { Skill } from "@shift-sync/shared";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -21,7 +22,7 @@ export function CreateShiftDialog({ open, onOpenChange, defaultLocationId }: Cre
   const isManager = user?.role === "MANAGER" || user?.role === "ADMIN";
   
   const { data: locations } = useLocations();
-  const { data: skills } = useSkills();
+  const { data: skills } = useSkills() as { data?: Skill[] };
   const createShift = useCreateShift();
 
   const [formData, setFormData] = useState({
@@ -35,7 +36,7 @@ export function CreateShiftDialog({ open, onOpenChange, defaultLocationId }: Cre
     status: "DRAFT",
   });
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     
     if (!formData.locationId || !formData.requiredSkillId) {
@@ -70,8 +71,11 @@ export function CreateShiftDialog({ open, onOpenChange, defaultLocationId }: Cre
         headcount: 1,
         status: "DRAFT",
       });
-    } catch (error: any) {
-      showError("Failed to create shift", error.message);
+    } catch (error: unknown) {
+      showError(
+        "Failed to create shift",
+        error instanceof Error ? error.message : String(error)
+      );
     }
   };
 
@@ -95,7 +99,7 @@ export function CreateShiftDialog({ open, onOpenChange, defaultLocationId }: Cre
               required
             >
               <option value="">Select location</option>
-              {locations?.map((loc: any) => (
+              {locations?.map((loc) => (
                 <option key={loc.id} value={loc.id}>{loc.name}</option>
               ))}
             </select>
@@ -157,7 +161,7 @@ export function CreateShiftDialog({ open, onOpenChange, defaultLocationId }: Cre
               required
             >
               <option value="">Select skill</option>
-              {skills?.map((skill: any) => (
+              {skills?.map((skill) => (
                 <option key={skill.id} value={skill.id}>{skill.name}</option>
               ))}
             </select>

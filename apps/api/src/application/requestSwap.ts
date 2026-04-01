@@ -10,11 +10,7 @@ interface RequestSwapParams {
   targetId?: string;
 }
 
-export async function requestSwap({
-  shiftId,
-  requesterId,
-  targetId,
-}: RequestSwapParams): Promise<{
+export async function requestSwap({ shiftId, requesterId, targetId }: RequestSwapParams): Promise<{
   success: boolean;
   swap?: unknown;
   error?: string;

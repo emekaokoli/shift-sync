@@ -7,13 +7,7 @@ export interface SwapRequest {
   requester_id: string;
   target_id: string | null;
   type: 'SWAP' | 'DROP';
-  status:
-    | 'PENDING'
-    | 'ACCEPTED'
-    | 'APPROVED'
-    | 'REJECTED'
-    | 'CANCELLED'
-    | 'EXPIRED';
+  status: 'PENDING' | 'ACCEPTED' | 'APPROVED' | 'REJECTED' | 'CANCELLED' | 'EXPIRED';
   response_reason: string | null;
   responded_by: string | null;
   version: number;
@@ -53,7 +47,7 @@ export const swapRepository = {
         'swap_requests.responded_by',
         'swap_requests.version',
         'swap_requests.created_at',
-        'swap_requests.updated_at',
+        'swap_requests.updated_at'
       )
       .leftJoin('shifts', 'swap_requests.shift_id', 'shifts.id')
       .orderBy('swap_requests.created_at', 'desc');
@@ -68,7 +62,7 @@ export const swapRepository = {
       query = query.where(function () {
         this.where('swap_requests.requester_id', filter.userId).orWhere(
           'swap_requests.target_id',
-          filter.userId,
+          filter.userId
         );
       });
     }
@@ -83,7 +77,7 @@ export const swapRepository = {
     return query;
   },
 
-  findManyWithRelations(filter?: SwapFilter, trx?: Knex.Transaction): Promise<any[]> {
+  findManyWithRelations(filter?: SwapFilter, trx?: Knex.Transaction): Promise<unknown[]> {
     const queryDb = getDb(trx);
     let query = queryDb('swap_requests')
       .select(
@@ -100,7 +94,9 @@ export const swapRepository = {
         'swap_requests.updated_at',
         db.raw("JSON_BUILD_OBJECT('id', requester.id, 'name', requester.name) as requester"),
         db.raw("JSON_BUILD_OBJECT('id', target.id, 'name', target.name) as target"),
-        db.raw("JSON_BUILD_OBJECT('id', shifts.id, 'start_time', shifts.start_time, 'end_time', shifts.end_time, 'location', JSON_BUILD_OBJECT('id', locations.id, 'name', locations.name)) as shift"),
+        db.raw(
+          "JSON_BUILD_OBJECT('id', shifts.id, 'start_time', shifts.start_time, 'end_time', shifts.end_time, 'location', JSON_BUILD_OBJECT('id', locations.id, 'name', locations.name)) as shift"
+        )
       )
       .leftJoin('users as requester', 'swap_requests.requester_id', 'requester.id')
       .leftJoin('users as target', 'swap_requests.target_id', 'target.id')
@@ -118,7 +114,7 @@ export const swapRepository = {
       query = query.where(function () {
         this.where('swap_requests.requester_id', filter.userId).orWhere(
           'swap_requests.target_id',
-          filter.userId,
+          filter.userId
         );
       });
     }
@@ -162,8 +158,7 @@ export const swapRepository = {
     const queryDb = getDb(trx);
     return queryDb('swap_requests')
       .where(function () {
-        this.where('requester_id', userId)
-          .orWhere('target_id', userId);
+        this.where('requester_id', userId).orWhere('target_id', userId);
       })
       .whereIn('status', ['PENDING', 'ACCEPTED'])
       .select();
@@ -173,8 +168,7 @@ export const swapRepository = {
     const queryDb = getDb(trx);
     return queryDb('swap_requests')
       .where(function () {
-        this.where('requester_id', userId)
-          .orWhere('target_id', userId);
+        this.where('requester_id', userId).orWhere('target_id', userId);
       })
       .whereIn('status', ['PENDING', 'ACCEPTED'])
       .count('*')
@@ -188,7 +182,7 @@ export const swapRepository = {
       target_id?: string | null;
       type: 'SWAP' | 'DROP';
     },
-    trx?: Knex.Transaction,
+    trx?: Knex.Transaction
   ): Promise<SwapRequest> {
     const queryDb = getDb(trx);
     const rows = await queryDb('swap_requests')
@@ -212,15 +206,14 @@ export const swapRepository = {
       type: 'SWAP' | 'DROP';
     },
     maxPendingSwaps: number,
-    trx: Knex.Transaction,
+    trx: Knex.Transaction
   ): Promise<{ success: boolean; error?: string; swap?: SwapRequest }> {
     const [shift, requester, existingPending] = await Promise.all([
       trx('shifts').where({ id: data.shift_id }).first(),
       trx('users').where({ id: data.requester_id }).first(),
       trx('swap_requests')
         .where(function () {
-          this.where('requester_id', data.requester_id)
-            .orWhere('target_id', data.requester_id);
+          this.where('requester_id', data.requester_id).orWhere('target_id', data.requester_id);
         })
         .whereIn('status', ['PENDING', 'ACCEPTED'])
         .count('*')
@@ -236,14 +229,20 @@ export const swapRepository = {
     }
 
     if (existingPending && Number(existingPending.count) >= maxPendingSwaps) {
-      return { success: false, error: `Maximum ${maxPendingSwaps} pending swap requests allowed` };
+      return {
+        success: false,
+        error: `Maximum ${maxPendingSwaps} pending swap requests allowed`,
+      };
     }
 
     if (data.type === 'DROP' && !data.target_id) {
       const hoursUntilShift = new Date(shift.start_time).getTime() - Date.now();
       const hours = hoursUntilShift / (1000 * 60 * 60);
       if (hours < 24) {
-        return { success: false, error: 'Cannot drop shift with less than 24h notice' };
+        return {
+          success: false,
+          error: 'Cannot drop shift with less than 24h notice',
+        };
       }
     }
 
@@ -263,13 +262,8 @@ export const swapRepository = {
 
   async update(
     id: string,
-    data: Partial<
-      Pick<
-        SwapRequest,
-        'status' | 'target_id' | 'responded_by' | 'response_reason'
-      >
-    >,
-    trx?: Knex.Transaction,
+    data: Partial<Pick<SwapRequest, 'status' | 'target_id' | 'responded_by' | 'response_reason'>>,
+    trx?: Knex.Transaction
   ): Promise<SwapRequest> {
     const queryDb = getDb(trx);
     const rows = await queryDb('swap_requests')
@@ -281,14 +275,9 @@ export const swapRepository = {
 
   async updateWithVersion(
     id: string,
-    data: Partial<
-      Pick<
-        SwapRequest,
-        'status' | 'target_id' | 'responded_by' | 'response_reason'
-      >
-    >,
+    data: Partial<Pick<SwapRequest, 'status' | 'target_id' | 'responded_by' | 'response_reason'>>,
     expectedVersion: number,
-    trx: Knex.Transaction,
+    trx: Knex.Transaction
   ): Promise<{ success: boolean; error?: string; swap?: SwapRequest }> {
     const current = await trx('swap_requests')
       .where({ id })
@@ -300,7 +289,10 @@ export const swapRepository = {
     }
 
     if (current.version !== expectedVersion) {
-      return { success: false, error: 'CONFLICT: Swap request was modified by another user' };
+      return {
+        success: false,
+        error: 'CONFLICT: Swap request was modified by another user',
+      };
     }
 
     const rows = await trx('swap_requests')
@@ -320,12 +312,9 @@ export const swapRepository = {
     newStatus: SwapRequest['status'],
     respondedBy: string,
     reason?: string,
-    trx?: Knex.Transaction,
+    trx?: Knex.Transaction
   ): Promise<{ success: boolean; error?: string; swap?: SwapRequest }> {
-    const current = await (trx || db)('swap_requests')
-      .where({ id })
-      .select('*')
-      .first();
+    const current = await (trx || db)('swap_requests').where({ id }).select('*').first();
 
     if (!current) {
       return { success: false, error: 'Swap request not found' };
@@ -338,7 +327,10 @@ export const swapRepository = {
 
     const allowed = validTransitions[current.status] || [];
     if (!allowed.includes(newStatus)) {
-      return { success: false, error: `Cannot transition from ${current.status} to ${newStatus}` };
+      return {
+        success: false,
+        error: `Cannot transition from ${current.status} to ${newStatus}`,
+      };
     }
 
     const rows = await (trx || db)('swap_requests')

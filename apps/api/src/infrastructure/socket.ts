@@ -1,8 +1,8 @@
-import { Server as SocketIOServer } from "socket.io";
-import { Server as HTTPServer } from "http";
-import { createLogger } from "./logger";
+import { Server as SocketIOServer } from 'socket.io';
+import { Server as HTTPServer } from 'http';
+import { createLogger } from './logger';
 
-const logger = createLogger("socket");
+const logger = createLogger('socket');
 
 export interface ShiftSyncSocket {
   userId: string;
@@ -10,37 +10,37 @@ export interface ShiftSyncSocket {
 }
 
 export const REALTIME_EVENTS = {
-  SHIFT_CREATED: "shift:created",
-  SHIFT_UPDATED: "shift:updated",
-  SHIFT_PUBLISHED: "shift:published",
-  SHIFT_DELETED: "shift:deleted",
-  ASSIGNMENT_CREATED: "assignment:created",
-  ASSIGNMENT_REMOVED: "assignment:removed",
-  ASSIGNMENT_CONFLICT: "assignment:conflict",
-  SWAP_REQUESTED: "swap:requested",
-  SWAP_ACCEPTED: "swap:accepted",
-  SWAP_APPROVED: "swap:approved",
-  SWAP_CANCELLED: "swap:cancelled",
-  SWAP_REJECTED: "swap:rejected",
-  NOTIFICATION: "notification",
+  SHIFT_CREATED: 'shift:created',
+  SHIFT_UPDATED: 'shift:updated',
+  SHIFT_PUBLISHED: 'shift:published',
+  SHIFT_DELETED: 'shift:deleted',
+  ASSIGNMENT_CREATED: 'assignment:created',
+  ASSIGNMENT_REMOVED: 'assignment:removed',
+  ASSIGNMENT_CONFLICT: 'assignment:conflict',
+  SWAP_REQUESTED: 'swap:requested',
+  SWAP_ACCEPTED: 'swap:accepted',
+  SWAP_APPROVED: 'swap:approved',
+  SWAP_CANCELLED: 'swap:cancelled',
+  SWAP_REJECTED: 'swap:rejected',
+  NOTIFICATION: 'notification',
 } as const;
 
 export function setupSocketIO(httpServer: HTTPServer) {
   const io = new SocketIOServer(httpServer, {
     cors: {
       origin:
-        process.env.NODE_ENV === "production"
+        process.env.NODE_ENV === 'production'
           ? process.env.FRONTEND_URL
-          : ["http://localhost:5173", "http://localhost:5174", "http://localhost:3000"],
+          : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000'],
       credentials: true,
     },
   });
 
-  io.on("connection", (socket) => {
-    logger.info({ socketId: socket.id }, "Socket connected");
+  io.on('connection', (socket) => {
+    logger.info({ socketId: socket.id }, 'Socket connected');
 
     // Handle user authentication
-    socket.on("auth", (data: ShiftSyncSocket) => {
+    socket.on('auth', (data: ShiftSyncSocket) => {
       socket.data = data;
 
       // Join user's personal room
@@ -51,38 +51,38 @@ export function setupSocketIO(httpServer: HTTPServer) {
         socket.join(`location:${locId}`);
       }
 
-      logger.info({ userId: data.userId }, "User joined rooms");
+      logger.info({ userId: data.userId }, 'User joined rooms');
     });
 
     // Subscribe to shift updates for a location
-    socket.on("subscribe:shifts", (locationId: string) => {
+    socket.on('subscribe:shifts', (locationId: string) => {
       socket.join(`location:${locationId}`);
     });
 
     // Unsubscribe from shifts
-    socket.on("unsubscribe:shifts", (locationId: string) => {
+    socket.on('unsubscribe:shifts', (locationId: string) => {
       socket.leave(`location:${locationId}`);
     });
 
     // Subscribe to swap notifications
-    socket.on("subscribe:swaps", () => {
-      socket.join("swaps");
+    socket.on('subscribe:swaps', () => {
+      socket.join('swaps');
     });
 
     // Check for assignment conflicts (real-time)
-    socket.on("assignment:check", async (data, callback) => {
+    socket.on('assignment:check', async (data, callback) => {
       // This is handled by the server, but we can emit conflict events
       callback?.({ received: true });
     });
 
-    socket.on("disconnect", () => {
-      logger.info({ socketId: socket.id }, "Socket disconnected");
+    socket.on('disconnect', () => {
+      logger.info({ socketId: socket.id }, 'Socket disconnected');
     });
   });
 
   // Store io in global for access from other modules
   (global as Record<string, unknown>).io = io;
-  
+
   return io;
 }
 
@@ -100,12 +100,9 @@ export function emitShiftUpdate(
   io: ReturnType<typeof setupSocketIO>,
   locationId: string,
   action: 'created' | 'updated' | 'published' | 'deleted',
-  data: Record<string, unknown>,
+  data: Record<string, unknown>
 ) {
-  const eventMap: Record<
-    'created' | 'updated' | 'published' | 'deleted',
-    string
-  > = {
+  const eventMap: Record<'created' | 'updated' | 'published' | 'deleted', string> = {
     created: REALTIME_EVENTS.SHIFT_CREATED,
     updated: REALTIME_EVENTS.SHIFT_UPDATED,
     published: REALTIME_EVENTS.SHIFT_PUBLISHED,
@@ -118,13 +115,11 @@ export function emitShiftUpdate(
 export function emitAssignment(
   io: ReturnType<typeof setupSocketIO>,
   locationId: string,
-  action: "created" | "removed",
-  data: Record<string, unknown>,
+  action: 'created' | 'removed',
+  data: Record<string, unknown>
 ) {
   const event =
-    action === "created"
-      ? REALTIME_EVENTS.ASSIGNMENT_CREATED
-      : REALTIME_EVENTS.ASSIGNMENT_REMOVED;
+    action === 'created' ? REALTIME_EVENTS.ASSIGNMENT_CREATED : REALTIME_EVENTS.ASSIGNMENT_REMOVED;
 
   io.to(`location:${locationId}`).emit(event, data);
 }
@@ -132,7 +127,7 @@ export function emitAssignment(
 export function emitConflict(
   io: ReturnType<typeof setupSocketIO>,
   locationId: string,
-  message: string,
+  message: string
 ) {
   io.to(`location:${locationId}`).emit(REALTIME_EVENTS.ASSIGNMENT_CONFLICT, {
     message,
@@ -142,8 +137,8 @@ export function emitConflict(
 export function emitSwapUpdate(
   io: ReturnType<typeof setupSocketIO>,
   swapId: string,
-  action: "requested" | "accepted" | "approved" | "cancelled" | "rejected",
-  data: Record<string, unknown>,
+  action: 'requested' | 'accepted' | 'approved' | 'cancelled' | 'rejected',
+  data: Record<string, unknown>
 ) {
   const eventMap = {
     requested: REALTIME_EVENTS.SWAP_REQUESTED,
@@ -153,13 +148,13 @@ export function emitSwapUpdate(
     rejected: REALTIME_EVENTS.SWAP_REJECTED,
   };
 
-  io.to("swaps").emit(eventMap[action], { swapId, ...data });
+  io.to('swaps').emit(eventMap[action], { swapId, ...data });
 }
 
 export function emitNotification(
   io: ReturnType<typeof setupSocketIO>,
   userId: string,
-  notification: Record<string, unknown>,
+  notification: Record<string, unknown>
 ) {
   io.to(`user:${userId}`).emit(REALTIME_EVENTS.NOTIFICATION, notification);
 }

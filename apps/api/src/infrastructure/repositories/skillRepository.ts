@@ -46,8 +46,8 @@ export const skillRepository = {
           .select(
             'user_skills.id',
             db.raw(
-              "JSON_BUILD_OBJECT('id', users.id, 'name', users.name, 'email', users.email) as user",
-            ),
+              "JSON_BUILD_OBJECT('id', users.id, 'name', users.name, 'email', users.email) as user"
+            )
           );
 
         return {
@@ -71,7 +71,7 @@ export const skillRepository = {
 
   async create(
     data: { name: string; description?: string },
-    trx?: Knex.Transaction,
+    trx?: Knex.Transaction
   ): Promise<Skill> {
     const queryDb = getDb(trx);
     const rows = await queryDb('skills')
@@ -85,11 +85,9 @@ export const skillRepository = {
 
   async createWithValidation(
     data: { name: string; description?: string },
-    trx: Knex.Transaction,
+    trx: Knex.Transaction
   ): Promise<{ success: boolean; error?: string; skill?: Skill }> {
-    const existing = await trx('skills')
-      .whereRaw('LOWER(name) = LOWER(?)', [data.name])
-      .first();
+    const existing = await trx('skills').whereRaw('LOWER(name) = LOWER(?)', [data.name]).first();
 
     if (existing) {
       return { success: false, error: 'Skill with this name already exists' };
@@ -108,7 +106,7 @@ export const skillRepository = {
   async update(
     id: string,
     data: Partial<Pick<Skill, 'name' | 'description'>>,
-    trx?: Knex.Transaction,
+    trx?: Knex.Transaction
   ): Promise<Skill> {
     const queryDb = getDb(trx);
     const rows = await queryDb('skills')
@@ -122,19 +120,19 @@ export const skillRepository = {
     id: string,
     data: Partial<Pick<Skill, 'name' | 'description'>>,
     expectedVersion: number,
-    trx: Knex.Transaction,
+    trx: Knex.Transaction
   ): Promise<{ success: boolean; error?: string; skill?: Skill }> {
-    const current = await trx('skills')
-      .where({ id })
-      .select('id', 'version')
-      .first();
+    const current = await trx('skills').where({ id }).select('id', 'version').first();
 
     if (!current) {
       return { success: false, error: 'Skill not found' };
     }
 
     if (current.version !== expectedVersion) {
-      return { success: false, error: 'CONFLICT: Skill was modified by another user' };
+      return {
+        success: false,
+        error: 'CONFLICT: Skill was modified by another user',
+      };
     }
 
     if (data.name) {
@@ -166,29 +164,26 @@ export const skillRepository = {
 
   async deleteWithValidation(
     id: string,
-    trx: Knex.Transaction,
+    trx: Knex.Transaction
   ): Promise<{ success: boolean; error?: string }> {
     const skill = await trx('skills').where({ id }).first();
     if (!skill) {
       return { success: false, error: 'Skill not found' };
     }
 
-    const assignedUsers = await trx('user_skills')
-      .where('skill_id', id)
-      .count('*')
-      .first();
+    const assignedUsers = await trx('user_skills').where('skill_id', id).count('*').first();
 
     if (assignedUsers && Number(assignedUsers.count) > 0) {
       return { success: false, error: 'Cannot delete skill assigned to users' };
     }
 
-    const requiredShifts = await trx('shifts')
-      .where('required_skill_id', id)
-      .count('*')
-      .first();
+    const requiredShifts = await trx('shifts').where('required_skill_id', id).count('*').first();
 
     if (requiredShifts && Number(requiredShifts.count) > 0) {
-      return { success: false, error: 'Cannot delete skill required by shifts' };
+      return {
+        success: false,
+        error: 'Cannot delete skill required by shifts',
+      };
     }
 
     await trx('skills').where({ id }).del();

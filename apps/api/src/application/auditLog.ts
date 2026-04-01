@@ -11,7 +11,7 @@ interface AuditLogParams {
 
 export async function createAuditLog(
   db: Knex | Knex.Transaction,
-  params: AuditLogParams,
+  params: AuditLogParams
 ): Promise<void> {
   await db('audit_logs').insert({
     user_id: params.userId,

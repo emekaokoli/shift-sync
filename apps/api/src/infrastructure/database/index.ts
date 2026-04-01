@@ -6,8 +6,7 @@ type ConfigKeys = keyof typeof config;
 const allowedEnvs: ConfigKeys[] = ['test', 'development', 'production'];
 const nodeEnv = process.env.NODE_ENV;
 
-const environment: ConfigKeys =
-  allowedEnvs.find((env: string) => env === nodeEnv) || 'development';
+const environment: ConfigKeys = allowedEnvs.find((env: string) => env === nodeEnv) || 'development';
 
 const database = knex(config[environment]);
 

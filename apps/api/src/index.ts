@@ -5,6 +5,7 @@ import { createServer as createHttpServer, Server as HttpServer } from 'http';
 import pino from 'pino-http';
 import path from 'path';
 import authRouter from './api/auth';
+import auditRouter from './api/audit';
 import locationsRouter from './api/locations';
 import shiftsRouter from './api/shifts';
 import skillsRouter from './api/skills';
@@ -28,7 +29,7 @@ export function createApp(): Express {
           ? process.env.FRONTEND_URL
           : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000'],
       credentials: true,
-    }),
+    })
   );
   app.use(helmet());
   app.use(apiLimiter);
@@ -38,6 +39,7 @@ export function createApp(): Express {
 
   // API Routes
   app.use('/api/v1/auth', authRouter);
+  app.use('/api/v1/audit', auditRouter);
   app.use('/api/v1/shifts', shiftsRouter);
   app.use('/api/v1/staff', staffRouter);
   app.use('/api/v1/swaps', swapsRouter);
@@ -49,7 +51,7 @@ export function createApp(): Express {
   if (process.env.NODE_ENV === 'production') {
     const staticPath = path.join(__dirname, '../../web/dist');
     app.use(express.static(staticPath));
-    
+
     // SPA fallback - serve index.html for non-API routes
     app.use('/*splat', (_, res) => {
       res.sendFile(path.join(staticPath, 'index.html'));

@@ -20,7 +20,21 @@ export const useLogin = () => {
         setAuth(data.user, data.accessToken, data.refreshToken);
         queryClient.invalidateQueries();
         showSuccess("Welcome back!", `Logged in as ${data.user.name}`);
-        navigate({ to: '/' });
+        
+        // Navigate based on user role
+        switch (data.user.role) {
+          case 'ADMIN':
+            navigate({ to: '/schedule' });
+            break;
+          case 'MANAGER':
+            navigate({ to: '/schedule' });
+            break;
+          case 'STAFF':
+            navigate({ to: '/my-shifts' });
+            break;
+          default:
+            navigate({ to: '/' });
+        }
       } else {
         logout();
       }
@@ -55,7 +69,21 @@ export const useRegister = () => {
         setAuth(data.user, data.accessToken, data.refreshToken);
         queryClient.invalidateQueries();
         showSuccess("Welcome!", `Account created for ${data.user.name}`);
-        navigate({ to: '/' });
+        
+        // Navigate based on user role
+        switch (data.user.role) {
+          case 'ADMIN':
+            navigate({ to: '/schedule' });
+            break;
+          case 'MANAGER':
+            navigate({ to: '/schedule' });
+            break;
+          case 'STAFF':
+            navigate({ to: '/my-shifts' });
+            break;
+          default:
+            navigate({ to: '/' });
+        }
       } else {
         logout();
       }

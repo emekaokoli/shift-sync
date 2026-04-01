@@ -1,5 +1,5 @@
 import type { Knex } from 'knex';
-import { validateAssignment } from "./validateAssignment";
+import { validateAssignment } from './validateAssignment';
 
 interface Suggestion {
   staffId: string;
@@ -18,9 +18,7 @@ export async function suggestAlternatives({
   shiftId,
   limit = 3,
 }: SuggestAlternativesParams): Promise<Suggestion[]> {
-  const shiftRows = await db('shifts')
-    .where('id', shiftId)
-    .first();
+  const shiftRows = await db('shifts').where('id', shiftId).first();
 
   if (!shiftRows) {
     return [];
@@ -52,9 +50,7 @@ export async function suggestAlternatives({
       locationCertifications: await db('user_locations')
         .where('user_id', staffRow.id)
         .select('location_id'),
-      availability: await db('availability')
-        .where('user_id', staffRow.id)
-        .select(),
+      availability: await db('availability').where('user_id', staffRow.id).select(),
     }))
   );
 
@@ -71,14 +67,11 @@ export async function suggestAlternatives({
       suggestions.push({
         staffId: staff.id,
         staffName: staff.name,
-        reason: "Available and qualified",
+        reason: 'Available and qualified',
       });
     } else {
       const blockingViolation = result.violations.find(
-        (v) =>
-          v.code.includes("BLOCK") ||
-          v.code === "OVERLAP" ||
-          v.code === "SKILL_MISMATCH",
+        (v) => v.code.includes('BLOCK') || v.code === 'OVERLAP' || v.code === 'SKILL_MISMATCH'
       );
 
       if (blockingViolation) {
@@ -97,8 +90,8 @@ export async function suggestAlternatives({
 
   return suggestions
     .sort((a, b) => {
-      const aValid = a.reason === "Available and qualified";
-      const bValid = b.reason === "Available and qualified";
+      const aValid = a.reason === 'Available and qualified';
+      const bValid = b.reason === 'Available and qualified';
       if (aValid && !bValid) return -1;
       if (!aValid && bValid) return 1;
       return 0;

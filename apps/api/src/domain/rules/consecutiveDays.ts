@@ -1,6 +1,6 @@
-import dayjs from "dayjs";
-import isoWeek from "dayjs/plugin/isoWeek";
-import { Violation, CONSTRAINTS } from "@shift-sync/shared";
+import dayjs from 'dayjs';
+import isoWeek from 'dayjs/plugin/isoWeek';
+import { Violation, CONSTRAINTS } from '@shift-sync/shared';
 
 dayjs.extend(isoWeek);
 
@@ -17,7 +17,7 @@ interface Assignment {
 
 export function checkConsecutiveDays(
   existingAssignments: Assignment[],
-  newShift: Shift,
+  newShift: Shift
 ): { violation: Violation | null; overrideRequired: boolean } {
   const warnAtDay = CONSTRAINTS.WARN_CONSECUTIVE_DAYS;
   const maxDays = CONSTRAINTS.MAX_CONSECUTIVE_DAYS;
@@ -30,9 +30,7 @@ export function checkConsecutiveDays(
   const daysWorked = new Set<number>();
 
   for (const assignment of existingAssignments) {
-    const shiftDate = dayjs(assignment.shift.startTime).tz(
-      assignment.shift.location.timezone,
-    );
+    const shiftDate = dayjs(assignment.shift.startTime).tz(assignment.shift.location.timezone);
 
     // Only count shifts in same ISO week
     if (shiftDate.isoWeek() === newIsoWeek && shiftDate.year() === newYear) {
@@ -49,7 +47,7 @@ export function checkConsecutiveDays(
   if (consecutiveCount > maxDays) {
     return {
       violation: {
-        code: "CONSECUTIVE_DAYS_BLOCK",
+        code: 'CONSECUTIVE_DAYS_BLOCK',
         message: `Cannot work ${consecutiveCount}th consecutive day - requires manager override with reason`,
       },
       overrideRequired: true,
@@ -60,7 +58,7 @@ export function checkConsecutiveDays(
   if (consecutiveCount === warnAtDay) {
     return {
       violation: {
-        code: "CONSECUTIVE_DAYS_WARNING",
+        code: 'CONSECUTIVE_DAYS_WARNING',
         message: `Warning: This will be your ${consecutiveCount}th consecutive day worked`,
       },
       overrideRequired: false,

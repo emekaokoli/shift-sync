@@ -1,5 +1,4 @@
 import { Knex } from 'knex';
-import { validateAssignment } from '../domain/engine';
 import { createAuditLog } from './auditLog';
 import db from '../infrastructure/database';
 
@@ -8,6 +7,10 @@ interface AssignShiftParams {
   staffId: string;
   assignedBy: string;
   version?: number;
+  override?: {
+    reason: string;
+    managerId: string;
+  };
 }
 
 interface AssignShiftResult {
@@ -22,12 +25,11 @@ export async function assignShift({
   staffId,
   assignedBy,
   version,
+  override,
 }: AssignShiftParams): Promise<AssignShiftResult> {
   try {
     const result = await db.transaction(async (trx: Knex.Transaction) => {
-      const current = await trx('shift_assignments')
-        .where({ shift_id: shiftId })
-        .first();
+      const current = await trx('shift_assignments').where({ shift_id: shiftId }).first();
 
       if (current && version !== undefined && current.version !== version) {
         throw new Error('CONFLICT: Shift was modified by another user');
@@ -55,13 +57,24 @@ export async function assignShift({
           .returning('*');
       }
 
-      await createAuditLog(trx, {
-        userId: assignedBy,
-        action: 'ASSIGN_STAFF',
-        entityType: 'ShiftAssignment',
-        entityId: assignment.id,
-        newValue: { staffId, shiftId },
-      });
+      if (override) {
+        await createAuditLog(trx, {
+          userId: assignedBy,
+          action: 'ASSIGN_WITH_OVERRIDE',
+          entityType: 'ShiftAssignment',
+          entityId: assignment.id,
+          oldValue: { staffId: current?.staff_id },
+          newValue: { staffId, shiftId, overrideReason: override.reason, overrideManagerId: override.managerId },
+        });
+      } else {
+        await createAuditLog(trx, {
+          userId: assignedBy,
+          action: 'ASSIGN_STAFF',
+          entityType: 'ShiftAssignment',
+          entityId: assignment.id,
+          newValue: { staffId, shiftId },
+        });
+      }
 
       return assignment;
     });

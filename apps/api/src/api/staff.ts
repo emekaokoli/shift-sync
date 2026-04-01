@@ -9,9 +9,7 @@ const router: Router = Router();
 
 router.use(authMiddleware);
 
-const getQueryString = (
-  value: unknown,
-): string | undefined => {
+const getQueryString = (value: unknown): string | undefined => {
   if (!value) return undefined;
   if (Array.isArray(value)) return String(value[0]);
   if (typeof value === 'object') return undefined;
@@ -66,11 +64,38 @@ router.patch('/:id', async (req: Request, res: Response) => {
       return ResponseUtils.validationError(
         res,
         'Validation failed',
-        error.issues
-          .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
-          .join(', '),
+        error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join(', ')
       );
     }
+    return ResponseUtils.handleError(res, error);
+  }
+});
+
+router.patch('/:id/notifications', async (req: Request, res: Response) => {
+  try {
+    const { inApp, email } = req.body;
+
+    if (typeof inApp !== 'boolean' && typeof email !== 'boolean') {
+      return ResponseUtils.validationError(res, 'inApp or email must be a boolean');
+    }
+
+    const existing = await staffRepository.findById(req.params.id as string);
+    if (!existing) {
+      return ResponseUtils.notFound(res, 'Staff not found');
+    }
+
+    const existingPrefs = existing.notification_preferences || { inApp: true, email: false };
+    const newPrefs = {
+      inApp: inApp !== undefined ? inApp : existingPrefs.inApp,
+      email: email !== undefined ? email : existingPrefs.email,
+    };
+
+    const staff = await staffRepository.update(req.params.id as string, {
+      notification_preferences: JSON.stringify(newPrefs),
+    });
+
+    return ResponseUtils.success(res, { notificationPreferences: newPrefs }, 'Notification preferences updated successfully');
+  } catch (error) {
     return ResponseUtils.handleError(res, error);
   }
 });
@@ -82,10 +107,7 @@ router.post('/:id/skills', async (req: Request, res: Response) => {
       return ResponseUtils.validationError(res, 'skillId is required');
     }
 
-    const userSkill = await staffRepository.addSkill(
-      req.params.id as string,
-      skillId,
-    );
+    const userSkill = await staffRepository.addSkill(req.params.id as string, skillId);
 
     return ResponseUtils.success(res, userSkill, 'Skill added successfully');
   } catch (error) {
@@ -95,10 +117,7 @@ router.post('/:id/skills', async (req: Request, res: Response) => {
 
 router.delete('/:id/skills/:skillId', async (req: Request, res: Response) => {
   try {
-    await staffRepository.removeSkill(
-      req.params.id as string,
-      req.params.skillId as string,
-    );
+    await staffRepository.removeSkill(req.params.id as string, req.params.skillId as string);
     return ResponseUtils.noContent(res, 'Skill removed successfully');
   } catch (error) {
     return ResponseUtils.handleError(res, error);
@@ -115,62 +134,43 @@ router.post('/:id/locations', async (req: Request, res: Response) => {
     const userLocation = await staffRepository.addLocation(
       req.params.id as string,
       locationId,
-      isManager,
+      isManager
     );
 
-    return ResponseUtils.success(
-      res,
-      userLocation,
-      'Location added successfully',
-    );
+    return ResponseUtils.success(res, userLocation, 'Location added successfully');
   } catch (error) {
     return ResponseUtils.handleError(res, error);
   }
 });
 
-router.delete(
-  '/:id/locations/:locationId',
-  async (req: Request, res: Response) => {
-    try {
-      await staffRepository.removeLocation(
-        req.params.id as string,
-        req.params.locationId as string,
-      );
-      return ResponseUtils.noContent(res, 'Location removed successfully');
-    } catch (error) {
-      return ResponseUtils.handleError(res, error);
-    }
-  },
-);
+router.delete('/:id/locations/:locationId', async (req: Request, res: Response) => {
+  try {
+    await staffRepository.removeLocation(req.params.id as string, req.params.locationId as string);
+    return ResponseUtils.noContent(res, 'Location removed successfully');
+  } catch (error) {
+    return ResponseUtils.handleError(res, error);
+  }
+});
 
 router.post('/:id/availability', async (req: Request, res: Response) => {
   try {
     const data = availabilitySchema.parse(req.body);
 
-    const availability = await staffRepository.addAvailability(
-      req.params.id as string,
-      {
-        day_of_week: data.dayOfWeek,
-        start_time: data.startTime,
-        end_time: data.endTime,
-        is_recurring: data.isRecurring,
-        specific_date: data.specificDate || null,
-      },
-    );
+    const availability = await staffRepository.addAvailability(req.params.id as string, {
+      day_of_week: data.dayOfWeek,
+      start_time: data.startTime,
+      end_time: data.endTime,
+      is_recurring: data.isRecurring,
+      specific_date: data.specificDate || null,
+    });
 
-    return ResponseUtils.created(
-      res,
-      availability,
-      'Availability set successfully',
-    );
+    return ResponseUtils.created(res, availability, 'Availability set successfully');
   } catch (error) {
     if (error instanceof z.ZodError) {
       return ResponseUtils.validationError(
         res,
         'Validation failed',
-        error.issues
-          .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
-          .join(', '),
+        error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join(', ')
       );
     }
     return ResponseUtils.handleError(res, error);

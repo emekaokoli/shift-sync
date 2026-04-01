@@ -1,2 +1,2 @@
-export * from "./validateAssignment";
-export * from "./suggestAlternatives";
+export * from './validateAssignment';
+export * from './suggestAlternatives';

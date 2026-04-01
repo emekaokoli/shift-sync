@@ -25,6 +25,11 @@ export function index() {
             <Link to="/swaps">
               <Button variant="ghost">Swaps</Button>
             </Link>
+            {(user?.role === 'MANAGER' || user?.role === 'ADMIN') && (
+              <Link to="/audit">
+                <Button variant="ghost">Audit</Button>
+              </Link>
+            )}
             <div className="flex items-center gap-2 ml-4">
               <span className="text-sm text-muted-foreground">{user?.name}</span>
               <Badge variant="outline">{user?.role}</Badge>

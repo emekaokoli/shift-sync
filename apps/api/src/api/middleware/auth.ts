@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction, Router } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import { verifyToken, extractToken } from '../../infrastructure/auth';
 import { ResponseUtils } from '../../infrastructure/response';
 
@@ -10,13 +10,12 @@ export interface AuthenticatedRequest extends Request {
   };
 }
 
-export function authMiddleware(
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction,
-) {
-  console.log('[Auth Middleware] Headers:', req.headers.authorization ? 'Token present' : 'No token');
-  
+export function authMiddleware(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  console.log(
+    '[Auth Middleware] Headers:',
+    req.headers.authorization ? 'Token present' : 'No token'
+  );
+
   const token = extractToken(req.headers.authorization);
 
   if (!token) {

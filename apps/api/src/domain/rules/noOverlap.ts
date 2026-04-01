@@ -1,5 +1,5 @@
-import { Violation } from "@shift-sync/shared";
-import dayjs from "dayjs";
+import { Violation } from '@shift-sync/shared';
+import dayjs from 'dayjs';
 
 interface Shift {
   id: string;
@@ -17,7 +17,7 @@ interface Assignment {
 
 export function checkNoOverlap(
   existingAssignments: Assignment[],
-  newShift: Shift,
+  newShift: Shift
 ): Violation | null {
   const newStart = dayjs(newShift.startTime);
   const newEnd = dayjs(newShift.endTime);
@@ -27,13 +27,12 @@ export function checkNoOverlap(
     const existingEnd = dayjs(assignment.shift.endTime);
 
     // Overlap check (inclusive start, exclusive end)
-    const hasOverlap =
-      newStart.isBefore(existingEnd) && newEnd.isAfter(existingStart);
+    const hasOverlap = newStart.isBefore(existingEnd) && newEnd.isAfter(existingStart);
 
     if (hasOverlap) {
       return {
-        code: "OVERLAP",
-        message: `Overlaps with shift at ${assignment.shift.location?.timezone || "another location"}`,
+        code: 'OVERLAP',
+        message: `Overlaps with shift at ${assignment.shift.location?.timezone || 'another location'}`,
         details: {
           conflictingShiftId: assignment.shift.id,
           conflictingStart: existingStart.toISOString(),

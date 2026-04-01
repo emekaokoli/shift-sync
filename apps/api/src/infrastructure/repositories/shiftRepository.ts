@@ -68,18 +68,14 @@ export const shiftRepository = {
     let query = queryDb('shifts')
       .select(shiftSelect)
       .leftJoin('locations', 'shifts.location_id', 'locations.id')
-      .leftJoin(
-        'skills as required_skill',
-        'shifts.required_skill_id',
-        'required_skill.id',
-      )
+      .leftJoin('skills as required_skill', 'shifts.required_skill_id', 'required_skill.id')
       .select(
         db.raw(
-          "JSON_BUILD_OBJECT('id', locations.id, 'name', locations.name, 'timezone', locations.timezone) as location",
+          "JSON_BUILD_OBJECT('id', locations.id, 'name', locations.name, 'timezone', locations.timezone) as location"
         ),
         db.raw(
-          "JSON_BUILD_OBJECT('id', required_skill.id, 'name', required_skill.name) as required_skill",
-        ),
+          "JSON_BUILD_OBJECT('id', required_skill.id, 'name', required_skill.name) as required_skill"
+        )
       )
       .orderBy('shifts.start_time', 'asc');
 
@@ -107,10 +103,9 @@ export const shiftRepository = {
       rows.map((row: Record<string, unknown>) => ({
         ...row,
         location: row.location as ShiftWithRelations['location'],
-        required_skill:
-          row.required_skill as ShiftWithRelations['required_skill'],
+        required_skill: row.required_skill as ShiftWithRelations['required_skill'],
         assignments: [],
-      })),
+      }))
     ) as Promise<ShiftWithRelations[]>;
   },
 
@@ -120,34 +115,30 @@ export const shiftRepository = {
       .select(
         ...shiftSelect,
         db.raw(
-          "JSON_BUILD_OBJECT('id', locations.id, 'name', locations.name, 'timezone', locations.timezone) as location",
+          "JSON_BUILD_OBJECT('id', locations.id, 'name', locations.name, 'timezone', locations.timezone) as location"
         ),
         db.raw(
-          "JSON_BUILD_OBJECT('id', required_skill.id, 'name', required_skill.name) as required_skill",
+          "JSON_BUILD_OBJECT('id', required_skill.id, 'name', required_skill.name) as required_skill"
         ),
         db.raw(
-          "COALESCE(JSON_AGG(assignments.staff) FILTER (WHERE assignments.staff IS NOT NULL), '[]') as assignments",
-        ),
+          "COALESCE(JSON_AGG(assignments.staff) FILTER (WHERE assignments.staff IS NOT NULL), '[]') as assignments"
+        )
       )
       .leftJoin('locations', 'shifts.location_id', 'locations.id')
-      .leftJoin(
-        'skills as required_skill',
-        'shifts.required_skill_id',
-        'required_skill.id',
-      )
+      .leftJoin('skills as required_skill', 'shifts.required_skill_id', 'required_skill.id')
       .leftJoin(
         db('shift_assignments')
           .select(
             'shift_assignments.id',
             'shift_assignments.shift_id',
             db.raw(
-              "JSON_BUILD_OBJECT('id', users.id, 'name', users.name, 'email', users.email) as staff",
-            ),
+              "JSON_BUILD_OBJECT('id', users.id, 'name', users.name, 'email', users.email) as staff"
+            )
           )
           .leftJoin('users', 'shift_assignments.staff_id', 'users.id')
           .as('assignments'),
         'assignments.shift_id',
-        'shifts.id',
+        'shifts.id'
       )
       .groupBy('shifts.id', 'locations.id', 'required_skill.id')
       .where('shifts.id', id)
@@ -157,10 +148,8 @@ export const shiftRepository = {
         return {
           ...row,
           location: row.location as ShiftWithRelations['location'],
-          required_skill:
-            row.required_skill as ShiftWithRelations['required_skill'],
-          assignments:
-            (row.assignments as ShiftWithRelations['assignments']) || [],
+          required_skill: row.required_skill as ShiftWithRelations['required_skill'],
+          assignments: (row.assignments as ShiftWithRelations['assignments']) || [],
         };
       }) as Promise<ShiftWithRelations | null>;
   },
@@ -180,14 +169,14 @@ export const shiftRepository = {
       .select(
         ...shiftSelect,
         db.raw(
-          "JSON_BUILD_OBJECT('id', locations.id, 'name', locations.name, 'timezone', locations.timezone) as location",
+          "JSON_BUILD_OBJECT('id', locations.id, 'name', locations.name, 'timezone', locations.timezone) as location"
         ),
         db.raw(
-          "JSON_BUILD_OBJECT('id', required_skill.id, 'name', required_skill.name) as required_skill",
+          "JSON_BUILD_OBJECT('id', required_skill.id, 'name', required_skill.name) as required_skill"
         ),
         db.raw(
-          "COALESCE(JSON_AGG(assignments.staff) FILTER (WHERE assignments.staff IS NOT NULL), '[]') as assignments",
-        ),
+          "COALESCE(JSON_AGG(assignments.staff) FILTER (WHERE assignments.staff IS NOT NULL), '[]') as assignments"
+        )
       )
       .leftJoin('locations', 'shifts.location_id', 'locations.id')
       .leftJoin('skills as required_skill', 'shifts.required_skill_id', 'required_skill.id')
@@ -197,13 +186,13 @@ export const shiftRepository = {
             'shift_assignments.id',
             'shift_assignments.shift_id',
             db.raw(
-              "JSON_BUILD_OBJECT('id', users.id, 'name', users.name, 'email', users.email) as staff",
-            ),
+              "JSON_BUILD_OBJECT('id', users.id, 'name', users.name, 'email', users.email) as staff"
+            )
           )
           .leftJoin('users', 'shift_assignments.staff_id', 'users.id')
           .as('assignments'),
         'assignments.shift_id',
-        'shifts.id',
+        'shifts.id'
       )
       .innerJoin('shift_assignments', 'shift_assignments.shift_id', 'shifts.id')
       .where('shift_assignments.staff_id', userId)
@@ -220,7 +209,7 @@ export const shiftRepository = {
       headcount: number;
       status: Shift['status'];
     },
-    trx?: Knex.Transaction,
+    trx?: Knex.Transaction
   ): Promise<ShiftWithRelations> {
     const queryDb = getDb(trx);
     const rows = await queryDb('shifts')
@@ -243,7 +232,7 @@ export const shiftRepository = {
       status: Shift['status'];
       published_at: Date;
     }>,
-    trx?: Knex.Transaction,
+    trx?: Knex.Transaction
   ): Promise<ShiftWithRelations> {
     const queryDb = getDb(trx);
     await queryDb('shifts')
@@ -265,19 +254,19 @@ export const shiftRepository = {
       published_at: Date;
     }>,
     expectedVersion: number,
-    trx: Knex.Transaction,
+    trx: Knex.Transaction
   ): Promise<{ success: boolean; error?: string; shift?: ShiftWithRelations }> {
-    const current = await trx('shifts')
-      .where({ id })
-      .select('id', 'version', 'status')
-      .first();
+    const current = await trx('shifts').where({ id }).select('id', 'version', 'status').first();
 
     if (!current) {
       return { success: false, error: 'Shift not found' };
     }
 
     if (current.version !== expectedVersion) {
-      return { success: false, error: 'CONFLICT: Shift was modified by another user' };
+      return {
+        success: false,
+        error: 'CONFLICT: Shift was modified by another user',
+      };
     }
 
     await trx('shifts')
@@ -301,14 +290,17 @@ export const shiftRepository = {
   deleteWithVersion(
     id: string,
     expectedVersion: number,
-    trx: Knex.Transaction,
+    trx: Knex.Transaction
   ): Promise<{ success: boolean; error?: string }> {
     return trx('shifts')
       .where({ id, version: expectedVersion })
       .del()
       .then((count) => {
         if (count === 0) {
-          return { success: false, error: 'CONFLICT: Shift was modified by another user' };
+          return {
+            success: false,
+            error: 'CONFLICT: Shift was modified by another user',
+          };
         }
         return { success: true };
       });

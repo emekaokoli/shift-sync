@@ -49,19 +49,15 @@ export const locationRepository = {
         const shifts = await queryDb('shifts')
           .where('shifts.location_id', id)
           .where('shifts.start_time', '>=', new Date())
-          .leftJoin(
-            'skills as required_skill',
-            'shifts.required_skill_id',
-            'required_skill.id',
-          )
+          .leftJoin('skills as required_skill', 'shifts.required_skill_id', 'required_skill.id')
           .select(
             'shifts.id',
             'shifts.start_time',
             'shifts.end_time',
             'shifts.status',
             db.raw(
-              "JSON_BUILD_OBJECT('id', required_skill.id, 'name', required_skill.name) as required_skill",
-            ),
+              "JSON_BUILD_OBJECT('id', required_skill.id, 'name', required_skill.name) as required_skill"
+            )
           )
           .orderBy('shifts.start_time', 'asc')
           .limit(20);
@@ -93,7 +89,7 @@ export const locationRepository = {
       timezone: string;
       cutoff_hours?: number;
     },
-    trx?: Knex.Transaction,
+    trx?: Knex.Transaction
   ): Promise<Location> {
     const queryDb = getDb(trx);
     const rows = await queryDb('locations')
@@ -113,14 +109,15 @@ export const locationRepository = {
       timezone: string;
       cutoff_hours?: number;
     },
-    trx: Knex.Transaction,
+    trx: Knex.Transaction
   ): Promise<{ success: boolean; error?: string; location?: Location }> {
-    const existing = await trx('locations')
-      .where('name', data.name)
-      .first();
+    const existing = await trx('locations').where('name', data.name).first();
 
     if (existing) {
-      return { success: false, error: 'Location with this name already exists' };
+      return {
+        success: false,
+        error: 'Location with this name already exists',
+      };
     }
 
     try {
@@ -130,7 +127,10 @@ export const locationRepository = {
     }
 
     if (data.cutoff_hours !== undefined && (data.cutoff_hours < 1 || data.cutoff_hours > 168)) {
-      return { success: false, error: 'Cutoff hours must be between 1 and 168' };
+      return {
+        success: false,
+        error: 'Cutoff hours must be between 1 and 168',
+      };
     }
 
     const rows = await trx('locations')
@@ -146,10 +146,8 @@ export const locationRepository = {
 
   async update(
     id: string,
-    data: Partial<
-      Pick<Location, 'name' | 'address' | 'timezone' | 'cutoff_hours'>
-    >,
-    trx?: Knex.Transaction,
+    data: Partial<Pick<Location, 'name' | 'address' | 'timezone' | 'cutoff_hours'>>,
+    trx?: Knex.Transaction
   ): Promise<Location> {
     const queryDb = getDb(trx);
     const rows = await queryDb('locations')
@@ -161,23 +159,21 @@ export const locationRepository = {
 
   async updateWithVersion(
     id: string,
-    data: Partial<
-      Pick<Location, 'name' | 'address' | 'timezone' | 'cutoff_hours'>
-    >,
+    data: Partial<Pick<Location, 'name' | 'address' | 'timezone' | 'cutoff_hours'>>,
     expectedVersion: number,
-    trx: Knex.Transaction,
+    trx: Knex.Transaction
   ): Promise<{ success: boolean; error?: string; location?: Location }> {
-    const current = await trx('locations')
-      .where({ id })
-      .select('id', 'version')
-      .first();
+    const current = await trx('locations').where({ id }).select('id', 'version').first();
 
     if (!current) {
       return { success: false, error: 'Location not found' };
     }
 
     if (current.version !== expectedVersion) {
-      return { success: false, error: 'CONFLICT: Location was modified by another user' };
+      return {
+        success: false,
+        error: 'CONFLICT: Location was modified by another user',
+      };
     }
 
     if (data.timezone) {
@@ -189,12 +185,12 @@ export const locationRepository = {
     }
 
     if (data.name) {
-      const existing = await trx('locations')
-        .where('name', data.name)
-        .whereNot('id', id)
-        .first();
+      const existing = await trx('locations').where('name', data.name).whereNot('id', id).first();
       if (existing) {
-        return { success: false, error: 'Location with this name already exists' };
+        return {
+          success: false,
+          error: 'Location with this name already exists',
+        };
       }
     }
 
@@ -217,7 +213,7 @@ export const locationRepository = {
 
   async deleteWithValidation(
     id: string,
-    trx: Knex.Transaction,
+    trx: Knex.Transaction
   ): Promise<{ success: boolean; error?: string }> {
     const location = await trx('locations').where({ id }).first();
     if (!location) {
@@ -231,16 +227,19 @@ export const locationRepository = {
       .first();
 
     if (activeShifts && Number(activeShifts.count) > 0) {
-      return { success: false, error: 'Cannot delete location with active shifts' };
+      return {
+        success: false,
+        error: 'Cannot delete location with active shifts',
+      };
     }
 
-    const assignedUsers = await trx('user_locations')
-      .where('location_id', id)
-      .count('*')
-      .first();
+    const assignedUsers = await trx('user_locations').where('location_id', id).count('*').first();
 
     if (assignedUsers && Number(assignedUsers.count) > 0) {
-      return { success: false, error: 'Cannot delete location with assigned users' };
+      return {
+        success: false,
+        error: 'Cannot delete location with assigned users',
+      };
     }
 
     await trx('locations').where({ id }).del();

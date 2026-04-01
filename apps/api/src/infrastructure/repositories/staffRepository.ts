@@ -10,6 +10,7 @@ export interface User {
   timezone: string;
   desired_hours: number;
   version: number;
+  notification_preferences?: Record<string, boolean>;
   created_at: Date;
   updated_at: Date;
 }
@@ -46,15 +47,7 @@ export const staffRepository = {
   findMany(filter?: StaffFilter, trx?: Knex.Transaction): Promise<Omit<User, 'password_hash'>[]> {
     const queryDb = getDb(trx);
     let query = queryDb('users')
-      .select(
-        'id',
-        'email',
-        'name',
-        'role',
-        'timezone',
-        'desired_hours',
-        'created_at',
-      )
+      .select('id', 'email', 'name', 'role', 'timezone', 'desired_hours', 'notification_preferences', 'created_at')
       .orderBy('name', 'asc');
 
     if (filter?.role) {
@@ -68,15 +61,7 @@ export const staffRepository = {
     const queryDb = getDb(trx);
     return queryDb('users')
       .where({ id })
-      .select(
-        'id',
-        'email',
-        'name',
-        'role',
-        'timezone',
-        'desired_hours',
-        'created_at',
-      )
+      .select('id', 'email', 'name', 'role', 'timezone', 'desired_hours', 'notification_preferences', 'created_at')
       .first()
       .then((row) => row || null);
   },
@@ -92,46 +77,38 @@ export const staffRepository = {
 
   async update(
     id: string,
-    data: Partial<
-      Pick<User, 'email' | 'name' | 'role' | 'timezone' | 'desired_hours'>
-    >,
-    trx?: Knex.Transaction,
+    data: Partial<Pick<User, 'email' | 'name' | 'role' | 'timezone' | 'desired_hours' | 'notification_preferences'>>,
+    trx?: Knex.Transaction
   ): Promise<Omit<User, 'password_hash'>> {
     const queryDb = getDb(trx);
     const rows = await queryDb('users')
       .where({ id })
       .update({ ...data, updated_at: queryDb.fn.now() })
-      .returning([
-        'id',
-        'email',
-        'name',
-        'role',
-        'timezone',
-        'desired_hours',
-        'created_at',
-      ]);
+      .returning(['id', 'email', 'name', 'role', 'timezone', 'desired_hours', 'notification_preferences', 'created_at']);
     return rows[0];
   },
 
   async updateWithVersion(
     id: string,
-    data: Partial<
-      Pick<User, 'email' | 'name' | 'role' | 'timezone' | 'desired_hours'>
-    >,
+    data: Partial<Pick<User, 'email' | 'name' | 'role' | 'timezone' | 'desired_hours'>>,
     expectedVersion: number,
-    trx: Knex.Transaction,
-  ): Promise<{ success: boolean; error?: string; user?: Omit<User, 'password_hash'> }> {
-    const current = await trx('users')
-      .where({ id })
-      .select('id', 'version')
-      .first();
+    trx: Knex.Transaction
+  ): Promise<{
+    success: boolean;
+    error?: string;
+    user?: Omit<User, 'password_hash'>;
+  }> {
+    const current = await trx('users').where({ id }).select('id', 'version').first();
 
     if (!current) {
       return { success: false, error: 'User not found' };
     }
 
     if (current.version !== expectedVersion) {
-      return { success: false, error: 'CONFLICT: User was modified by another user' };
+      return {
+        success: false,
+        error: 'CONFLICT: User was modified by another user',
+      };
     }
 
     const rows = await trx('users')
@@ -141,15 +118,7 @@ export const staffRepository = {
         version: current.version + 1,
         updated_at: trx.fn.now(),
       })
-      .returning([
-        'id',
-        'email',
-        'name',
-        'role',
-        'timezone',
-        'desired_hours',
-        'created_at',
-      ]);
+      .returning(['id', 'email', 'name', 'role', 'timezone', 'desired_hours', 'created_at']);
 
     return { success: true, user: rows[0] };
   },
@@ -157,7 +126,7 @@ export const staffRepository = {
   async addSkill(
     userId: string,
     skillId: string,
-    trx?: Knex.Transaction,
+    trx?: Knex.Transaction
   ): Promise<{
     user_id: string;
     skill_id: string;
@@ -175,9 +144,7 @@ export const staffRepository = {
       .select(
         'user_skills.user_id',
         'user_skills.skill_id',
-        db.raw(
-          "JSON_BUILD_OBJECT('id', skills.id, 'name', skills.name) as skill",
-        ),
+        db.raw("JSON_BUILD_OBJECT('id', skills.id, 'name', skills.name) as skill")
       )
       .first()
       .then((row: Record<string, unknown>) => ({
@@ -190,7 +157,7 @@ export const staffRepository = {
   async addSkillWithValidation(
     userId: string,
     skillId: string,
-    trx: Knex.Transaction,
+    trx: Knex.Transaction
   ): Promise<{ success: boolean; error?: string }> {
     const [user, skill] = await Promise.all([
       trx('users').where({ id: userId }).first(),
@@ -215,16 +182,14 @@ export const staffRepository = {
 
   removeSkill(userId: string, skillId: string, trx?: Knex.Transaction): Promise<number> {
     const queryDb = getDb(trx);
-    return queryDb('user_skills')
-      .where({ user_id: userId, skill_id: skillId })
-      .del();
+    return queryDb('user_skills').where({ user_id: userId, skill_id: skillId }).del();
   },
 
   async addLocation(
     userId: string,
     locationId: string,
     isManager?: boolean,
-    trx?: Knex.Transaction,
+    trx?: Knex.Transaction
   ): Promise<{
     user_id: string;
     location_id: string;
@@ -248,9 +213,7 @@ export const staffRepository = {
         'user_locations.user_id',
         'user_locations.location_id',
         'user_locations.is_manager',
-        db.raw(
-          "JSON_BUILD_OBJECT('id', locations.id, 'name', locations.name) as location",
-        ),
+        db.raw("JSON_BUILD_OBJECT('id', locations.id, 'name', locations.name) as location")
       )
       .first()
       .then((row: Record<string, unknown>) => ({
@@ -265,7 +228,7 @@ export const staffRepository = {
     userId: string,
     locationId: string,
     isManager: boolean,
-    trx: Knex.Transaction,
+    trx: Knex.Transaction
   ): Promise<{ success: boolean; error?: string }> {
     const [user, location] = await Promise.all([
       trx('users').where({ id: userId }).first(),
@@ -281,7 +244,10 @@ export const staffRepository = {
     }
 
     if (isManager && user.role !== 'MANAGER' && user.role !== 'ADMIN') {
-      return { success: false, error: 'Only managers can be assigned to locations as managers' };
+      return {
+        success: false,
+        error: 'Only managers can be assigned to locations as managers',
+      };
     }
 
     await trx('user_locations')
@@ -298,15 +264,13 @@ export const staffRepository = {
 
   removeLocation(userId: string, locationId: string, trx?: Knex.Transaction): Promise<number> {
     const queryDb = getDb(trx);
-    return queryDb('user_locations')
-      .where({ user_id: userId, location_id: locationId })
-      .del();
+    return queryDb('user_locations').where({ user_id: userId, location_id: locationId }).del();
   },
 
   async findUserLocationIds(
     userId: string,
     onlyManaged = false,
-    trx?: Knex.Transaction,
+    trx?: Knex.Transaction
   ): Promise<string[]> {
     const queryDb = getDb(trx);
     const rows = await queryDb('user_locations')
@@ -330,7 +294,7 @@ export const staffRepository = {
       is_recurring?: boolean;
       specific_date?: string | null;
     },
-    trx?: Knex.Transaction,
+    trx?: Knex.Transaction
   ): Promise<Availability> {
     const queryDb = getDb(trx);
     const rows = await queryDb('availability')
@@ -355,8 +319,12 @@ export const staffRepository = {
       is_recurring?: boolean;
       specific_date?: string | null;
     },
-    trx: Knex.Transaction,
-  ): Promise<{ success: boolean; error?: string; availability?: Availability }> {
+    trx: Knex.Transaction
+  ): Promise<{
+    success: boolean;
+    error?: string;
+    availability?: Availability;
+  }> {
     const user = await trx('users').where({ id: userId }).first();
 
     if (!user) {

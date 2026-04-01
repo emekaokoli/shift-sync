@@ -4,10 +4,7 @@ import { z } from 'zod';
 import { approveSwap } from '../application/approveSwap';
 import { requestSwap } from '../application/requestSwap';
 import db from '../infrastructure/database';
-import {
-  staffRepository,
-  swapRepository,
-} from '../infrastructure/repositories';
+import { staffRepository, swapRepository } from '../infrastructure/repositories';
 import { ResponseUtils } from '../infrastructure/response';
 import { authMiddleware, type AuthenticatedRequest } from './middleware/auth';
 
@@ -30,10 +27,7 @@ async function getManagerLocationIds(user?: AuthenticatedRequest['user']) {
   return staffRepository.findUserLocationIds(user.userId, true);
 }
 
-async function authorizeSwapAccess(
-  swapId: string,
-  user?: AuthenticatedRequest['user'],
-) {
+async function authorizeSwapAccess(swapId: string, user?: AuthenticatedRequest['user']) {
   const swap = await swapRepository.findById(swapId);
   if (!swap) {
     return { swap: null, error: 'Swap request not found' };
@@ -48,10 +42,7 @@ async function authorizeSwapAccess(
       };
     }
 
-    const shift = await db('shifts')
-      .where({ id: swap.shift_id })
-      .select('location_id')
-      .first();
+    const shift = await db('shifts').where({ id: swap.shift_id }).select('location_id').first();
 
     if (!shift || !allowedLocationIds?.includes(shift.location_id)) {
       return {
@@ -77,11 +68,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
       locationIds: managerLocationIds ?? undefined,
     });
 
-    return ResponseUtils.success(
-      res,
-      swaps,
-      'Swap requests fetched successfully',
-    );
+    return ResponseUtils.success(res, swaps, 'Swap requests fetched successfully');
   } catch (error) {
     return ResponseUtils.handleError(res, error);
   }
@@ -89,10 +76,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
 
 router.get('/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { swap, error } = await authorizeSwapAccess(
-      req.params.id as string,
-      req.user,
-    );
+    const { swap, error } = await authorizeSwapAccess(req.params.id as string, req.user);
 
     if (error) {
       if (error === 'Swap request not found') {
@@ -101,11 +85,7 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response) => {
       return ResponseUtils.forbidden(res, error);
     }
 
-    return ResponseUtils.success(
-      res,
-      swap,
-      'Swap request fetched successfully',
-    );
+    return ResponseUtils.success(res, swap, 'Swap request fetched successfully');
   } catch (error) {
     return ResponseUtils.handleError(res, error);
   }
@@ -127,131 +107,95 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
     });
 
     if (!result.success) {
-      return ResponseUtils.error(
-        res,
-        result.error || 'Failed to create swap request',
-        400,
-      );
+      return ResponseUtils.error(res, result.error || 'Failed to create swap request', 400);
     }
 
-    const swap = await swapRepository.findById(
-      (result.swap as { id: string }).id,
-    );
-    return ResponseUtils.created(
-      res,
-      swap,
-      'Swap request created successfully',
-    );
+    const swap = await swapRepository.findById((result.swap as { id: string }).id);
+    return ResponseUtils.created(res, swap, 'Swap request created successfully');
   } catch (error) {
     if (error instanceof z.ZodError) {
       return ResponseUtils.validationError(
         res,
         'Validation failed',
-        error.issues
-          .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
-          .join(', '),
+        error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join(', ')
       );
     }
     return ResponseUtils.handleError(res, error);
   }
 });
 
-router.post(
-  '/:id/respond',
-  async (req: AuthenticatedRequest, res: Response) => {
-    try {
-      const actionSchema = z.object({
-        action: z.enum(['accept', 'reject', 'approve', 'cancel']),
-      });
-      const { action } = actionSchema.parse(req.body);
-      const userId = req.user?.userId;
-      const overrideReason = req.headers['x-override-reason'] as
-        | string
-        | undefined;
+router.post('/:id/respond', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const actionSchema = z.object({
+      action: z.enum(['accept', 'reject', 'approve', 'cancel']),
+    });
+    const { action } = actionSchema.parse(req.body);
+    const userId = req.user?.userId;
+    const overrideReason = req.headers['x-override-reason'] as string | undefined;
 
-      if (!userId) {
-        return ResponseUtils.unauthorized(res, 'User ID required');
-      }
-
-      const swap = await swapRepository.findById(req.params.id as string);
-      if (!swap) {
-        return ResponseUtils.notFound(res, 'Swap request not found');
-      }
-
-      if (action === 'approve') {
-        if (req.user?.role !== 'ADMIN' && req.user?.role !== 'MANAGER') {
-          return ResponseUtils.forbidden(
-            res,
-            'Only managers or admins can approve swap requests',
-          );
-        }
-        if (req.user?.role === 'MANAGER') {
-          const managerLocationIds = await getManagerLocationIds(req.user);
-          const shift = await db('shifts')
-            .where({ id: swap.shift_id })
-            .select('location_id')
-            .first();
-          if (!shift || !managerLocationIds?.includes(shift.location_id)) {
-            return ResponseUtils.forbidden(
-              res,
-              'Not authorized to approve swap requests for this location',
-            );
-          }
-        }
-      }
-
-      if (action === 'accept' || action === 'reject') {
-        if (swap.target_id !== userId) {
-          return ResponseUtils.forbidden(
-            res,
-            'Only the target user may accept or reject this swap request',
-          );
-        }
-      }
-
-      if (action === 'cancel') {
-        if (swap.requester_id !== userId) {
-          return ResponseUtils.forbidden(
-            res,
-            'Only the requester may cancel this swap request',
-          );
-        }
-      }
-
-      const result = await approveSwap({
-        swapId: req.params.id as string,
-        action,
-        userId,
-        overrideReason,
-      });
-
-      if (!result.success) {
-        return ResponseUtils.error(
-          res,
-          result.error || 'Failed to respond to swap request',
-          400,
-        );
-      }
-
-      return ResponseUtils.success(
-        res,
-        result.swap,
-        'Swap request responded successfully',
-      );
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return ResponseUtils.validationError(
-          res,
-          'Validation failed',
-          error.issues
-            .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
-            .join(', '),
-        );
-      }
-      return ResponseUtils.handleError(res, error);
+    if (!userId) {
+      return ResponseUtils.unauthorized(res, 'User ID required');
     }
-  },
-);
+
+    const swap = await swapRepository.findById(req.params.id as string);
+    if (!swap) {
+      return ResponseUtils.notFound(res, 'Swap request not found');
+    }
+
+    if (action === 'approve') {
+      if (req.user?.role !== 'ADMIN' && req.user?.role !== 'MANAGER') {
+        return ResponseUtils.forbidden(res, 'Only managers or admins can approve swap requests');
+      }
+      if (req.user?.role === 'MANAGER') {
+        const managerLocationIds = await getManagerLocationIds(req.user);
+        const shift = await db('shifts').where({ id: swap.shift_id }).select('location_id').first();
+        if (!shift || !managerLocationIds?.includes(shift.location_id)) {
+          return ResponseUtils.forbidden(
+            res,
+            'Not authorized to approve swap requests for this location'
+          );
+        }
+      }
+    }
+
+    if (action === 'accept' || action === 'reject') {
+      if (swap.target_id !== userId) {
+        return ResponseUtils.forbidden(
+          res,
+          'Only the target user may accept or reject this swap request'
+        );
+      }
+    }
+
+    if (action === 'cancel') {
+      if (swap.requester_id !== userId) {
+        return ResponseUtils.forbidden(res, 'Only the requester may cancel this swap request');
+      }
+    }
+
+    const result = await approveSwap({
+      swapId: req.params.id as string,
+      action,
+      userId,
+      overrideReason,
+    });
+
+    if (!result.success) {
+      return ResponseUtils.error(res, result.error || 'Failed to respond to swap request', 400);
+    }
+
+    return ResponseUtils.success(res, result.swap, 'Swap request responded successfully');
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return ResponseUtils.validationError(
+        res,
+        'Validation failed',
+        error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join(', ')
+      );
+    }
+    return ResponseUtils.handleError(res, error);
+  }
+});
 
 router.delete('/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -268,10 +212,7 @@ router.delete('/:id', async (req: AuthenticatedRequest, res: Response) => {
     }
 
     if (swap.requester_id !== userId) {
-      return ResponseUtils.forbidden(
-        res,
-        'Not authorized to cancel this request',
-      );
+      return ResponseUtils.forbidden(res, 'Not authorized to cancel this request');
     }
 
     if (swap.status !== 'PENDING') {

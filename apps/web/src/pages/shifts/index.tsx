@@ -7,13 +7,28 @@ import { useAuthStore } from "@/lib/stores";
 import dayjs from "dayjs";
 import { Clock, MapPin } from "lucide-react";
 
+interface MyShift {
+  id: string;
+  location?: { name: string };
+  start_time: string;
+  end_time: string;
+  status: string;
+}
+
+interface SwapRequest {
+  id: string;
+  type: string;
+  status: string;
+  shift?: { start_time?: string; location?: { name: string } };
+}
+
 export function MyShifts() {
   const { user } = useAuthStore();
   
   useSocketSync();
 
-  const { data: myShifts } = useMyShifts();
-  const { data: swaps } = useSwaps({ userId: user?.id });
+  const { data: myShifts } = useMyShifts() as { data?: MyShift[] };
+  const { data: swaps } = useSwaps({ userId: user?.id }) as { data?: SwapRequest[] };
 
   return (
     <div className="container w-full">
@@ -33,7 +48,7 @@ export function MyShifts() {
             </Card>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {(myShifts || []).map((shift: any) => (
+              {(myShifts || []).map((shift) => (
                 <Card key={shift.id}>
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
@@ -75,7 +90,7 @@ export function MyShifts() {
             </Card>
           ) : (
             <div className="space-y-2 max-w-full">
-              {(swaps || []).map((swap: any) => (
+              {(swaps || []).map((swap) => (
                 <Card key={swap.id}>
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">

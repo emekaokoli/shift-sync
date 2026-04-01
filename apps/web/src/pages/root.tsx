@@ -29,6 +29,7 @@ export function Root() {
           {isAuthenticated && user && (
             <div className="flex items-center gap-4">
               <nav className="flex items-center gap-2">
+                <Link to="/audit">Audit</Link> 
                 <Link
                   to="/schedule"
                   className="text-sm px-3 py-1 rounded hover:bg-gray-100"

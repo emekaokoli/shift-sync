@@ -7,6 +7,7 @@ import { useAssignShift, usePublishShift, useShifts, useValidateShiftAssignment 
 import { useSocketSync } from "@/hooks/socket";
 import { useStaff } from "@/hooks/staff";
 import { useAuthStore } from "@/lib/stores";
+import { useNavigate } from "@tanstack/react-router";
 import dayjs from "dayjs";
 import { Clock, MapPin, Plus, UserPlus, Users } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -14,6 +15,7 @@ import { useMemo, useState } from "react";
 
 export function Schedule() {
   const { user } = useAuthStore();
+  const navigate = useNavigate();
   const isManager = user?.role === "MANAGER" || user?.role === "ADMIN";
   const [selectedLocation, setSelectedLocation] = useState<string>("all");
   const [selectedWeek, setSelectedWeek] = useState(dayjs().startOf("week"));
@@ -255,6 +257,21 @@ export function Schedule() {
                             onClick={() => handlePublish(shiftData.id)}
                           >
                             Publish
+                          </Button>
+                        )}
+                        {(isManager || user?.role === 'ADMIN') && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="w-full mt-2 text-sm cursor-pointer"
+                            onClick={() =>
+                              navigate({
+                                to: '/audit',
+                                search: { entityType: 'SHIFT', entityId: shiftData.id },
+                              })
+                            }
+                          >
+                            View history
                           </Button>
                         )}
                         <Badge

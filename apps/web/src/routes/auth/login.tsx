@@ -8,6 +8,11 @@ function getStoredAuth() {
       const parsed = JSON.parse(stored);
       return {
         accessToken: parsed.state?.accessToken ?? parsed.accessToken,
+        accessTokenExpiresAt:
+          parsed.state?.accessTokenExpiresAt ?? parsed.accessTokenExpiresAt,
+        refreshToken: parsed.state?.refreshToken ?? parsed.refreshToken,
+        refreshTokenExpiresAt:
+          parsed.state?.refreshTokenExpiresAt ?? parsed.refreshTokenExpiresAt,
         user: parsed.state?.user ?? parsed.user,
       };
     }
@@ -20,7 +25,16 @@ function getStoredAuth() {
 export const Route = createFileRoute('/auth/login')({
   beforeLoad: async () => {
     const stored = getStoredAuth();
-    if (stored?.accessToken) {
+    const hasValidAccessToken =
+      !!stored?.accessToken &&
+      !!stored?.accessTokenExpiresAt &&
+      Date.now() < stored.accessTokenExpiresAt;
+    const hasValidRefreshToken =
+      !!stored?.refreshToken &&
+      !!stored?.refreshTokenExpiresAt &&
+      Date.now() < stored.refreshTokenExpiresAt;
+
+    if (hasValidAccessToken || hasValidRefreshToken) {
       throw redirect({
         to: '/',
       });

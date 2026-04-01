@@ -47,18 +47,21 @@ export const authGuard = async ({ location }: { location: { pathname: string } }
             useAuthStore.getState().setTokens(accessToken, refreshToken);
           }
         } else {
+          useAuthStore.getState().logout();
           throw redirect({
             to: '/auth/login',
             search: { redirect: location.pathname },
           });
         }
       } catch {
+        useAuthStore.getState().logout();
         throw redirect({
           to: '/auth/login',
           search: { redirect: location.pathname },
         });
       }
     } else {
+      useAuthStore.getState().logout();
       throw redirect({
         to: '/auth/login',
         search: { redirect: location.pathname },
@@ -68,11 +71,14 @@ export const authGuard = async ({ location }: { location: { pathname: string } }
 };
 
 export const roleGuard = (allowedRoles: string[]) => {
-  return async () => {
+  return async ({ location }: { location?: { pathname: string } } = {}) => {
     const stored = getStoredAuth();
     
     if (!stored?.isAuthenticated || !stored.user) {
-      throw redirect({ to: '/auth/login' });
+      throw redirect({
+        to: '/auth/login',
+        ...(location ? { search: { redirect: location.pathname } } : {}),
+      });
     }
 
     if (!allowedRoles.includes(stored.user.role)) {

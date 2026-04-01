@@ -16,11 +16,7 @@ interface UpdateShiftParams {
   userId: string;
 }
 
-export async function updateShift({
-  shiftId,
-  updates,
-  userId,
-}: UpdateShiftParams): Promise<{
+export async function updateShift({ shiftId, updates, userId }: UpdateShiftParams): Promise<{
   success: boolean;
   shift?: unknown;
   error?: string;
@@ -28,9 +24,7 @@ export async function updateShift({
 }> {
   try {
     const result = await db.transaction(async (trx: Knex.Transaction) => {
-      const currentShift = await trx('shifts')
-        .where({ id: shiftId })
-        .first();
+      const currentShift = await trx('shifts').where({ id: shiftId }).first();
 
       if (!currentShift) {
         throw new Error('Shift not found');
@@ -64,12 +58,17 @@ export async function updateShift({
       const cancelledSwaps: unknown[] = [];
 
       if (updates.start_time || updates.end_time || updates.location_id) {
-        const pendingSwaps = await trx('swap_requests')
-          .where({ shift_id: shiftId, status: 'PENDING' });
+        const pendingSwaps = await trx('swap_requests').where({
+          shift_id: shiftId,
+          status: 'PENDING',
+        });
 
         if (pendingSwaps.length > 0) {
           await trx('swap_requests')
-            .whereIn('id', pendingSwaps.map((s) => s.id))
+            .whereIn(
+              'id',
+              pendingSwaps.map((s) => s.id)
+            )
             .update({ status: 'CANCELLED', updated_at: trx.fn.now() });
 
           for (const swap of pendingSwaps) {
