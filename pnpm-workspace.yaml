@@ -1,11 +1,5 @@
 packages:
-  - apps/*
+  - 'apps/*'
+  - 'shared/*'
 
 ignoreScripts: false
-
-onlyBuiltDependencies:
-  - '@prisma/client'
-  - '@prisma/engines'
-  - esbuild
-  - msw
-  - prisma

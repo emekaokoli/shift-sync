@@ -3,6 +3,7 @@ import express, { Express, json } from 'express';
 import helmet from 'helmet';
 import { createServer as createHttpServer, Server as HttpServer } from 'http';
 import pino from 'pino-http';
+import path from 'path';
 import authRouter from './api/auth';
 import locationsRouter from './api/locations';
 import shiftsRouter from './api/shifts';
@@ -43,6 +44,17 @@ export function createApp(): Express {
   app.use('/api/v1/notifications', notificationsRouter);
   app.use('/api/v1/locations', locationsRouter);
   app.use('/api/v1/skills', skillsRouter);
+
+  // Serve static files in production
+  if (process.env.NODE_ENV === 'production') {
+    const staticPath = path.join(__dirname, '../../web/dist');
+    app.use(express.static(staticPath));
+    
+    // SPA fallback - serve index.html for non-API routes
+    app.use('/*splat', (_, res) => {
+      res.sendFile(path.join(staticPath, 'index.html'));
+    });
+  }
 
   // Health check
   app.get('/healthcheck', (_, res) => {

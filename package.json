@@ -4,14 +4,17 @@
   "scripts": {
     "dev": "pnpm --parallel -r dev",
     "dev:all": "pnpm --parallel -r dev",
-    "dev:backend": "pnpm --filter @shift-sync/backend dev",
+    "dev:api": "pnpm --filter @shift-sync/api dev",
     "dev:web": "pnpm --filter @shift-sync/web dev",
-    "build": "pnpm -r build",
-    "start": "pnpm --filter @shift-sync/apps start",
-    "test": "pnpm --filter @shift-sync/backend test",
-    "test:watch": "pnpm --filter @shift-sync/backend test:watch",
-    "lint": "pnpm --filter @shift-sync/backend lint",
-    "lint:fix": "pnpm --filter @shift-sync/backend lint:fix"
+    "build": "pnpm --filter @shift-sync/api build && pnpm --filter @shift-sync/web build",
+    "start": "pnpm run build && pnpm run db:migrate && pnpm run db:seed && pnpm --parallel run start:prod",
+    "start:prod": "pnpm --filter @shift-sync/api start & pnpm --filter @shift-sync/web start",
+    "db:migrate": "pnpm --filter @shift-sync/api run db:migrate",
+    "db:seed": "pnpm --filter @shift-sync/api run db:seed",
+    "test": "pnpm --filter @shift-sync/api test",
+    "test:watch": "pnpm --filter @shift-sync/api test:watch",
+    "lint": "pnpm --filter @shift-sync/api lint",
+    "lint:fix": "pnpm --filter @shift-sync/api lint:fix"
   },
   "devDependencies": {
     "typescript": "^5.7.2"
