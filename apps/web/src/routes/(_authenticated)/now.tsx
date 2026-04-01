@@ -1,4 +1,4 @@
-import { authGuard, roleGuard } from '@/components/routeAuthGuard';
+import { authGuard } from '@/components/routeAuthGuard';
 import { CurrentShifts } from '@/pages/now';
 import { createFileRoute } from '@tanstack/react-router';
 

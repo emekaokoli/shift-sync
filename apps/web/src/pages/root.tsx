@@ -29,7 +29,6 @@ export function Root() {
           {isAuthenticated && user && (
             <div className="flex items-center gap-4">
               <nav className="flex items-center gap-2">
-                <Link to="/audit">Audit</Link> 
                 <Link
                   to="/schedule"
                   className="text-sm px-3 py-1 rounded hover:bg-gray-100"
@@ -43,10 +42,40 @@ export function Root() {
                   Calendar
                 </Link>
                 <Link
+                  to="/now"
+                  className="text-sm px-3 py-1 rounded hover:bg-gray-100"
+                >
+                  Now
+                </Link>
+                <Link
                   to="/overtime"
                   className="text-sm px-3 py-1 rounded hover:bg-gray-100"
                 >
                   Overtime
+                </Link>
+                <Link
+                  to="/analytics"
+                  className="text-sm px-3 py-1 rounded hover:bg-gray-100"
+                >
+                  Analytics
+                </Link>
+                <Link
+                  to="/premium"
+                  className="text-sm px-3 py-1 rounded hover:bg-gray-100"
+                >
+                  Premium
+                </Link>
+                <Link
+                  to="/audit"
+                  className="text-sm px-3 py-1 rounded hover:bg-gray-100"
+                >
+                  Audit
+                </Link>
+                <Link
+                  to="/settings"
+                  className="text-sm px-3 py-1 rounded hover:bg-gray-100"
+                >
+                  Settings
                 </Link>
               </nav>
               <NotificationBell />

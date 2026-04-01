@@ -67,4 +67,20 @@ export const shiftsApi = {
     const query = searchParams.toString();
     return fetchApi<unknown>(`/api/v1/shifts/overtime-stats${query ? `?${query}` : ""}`);
   },
+
+  getCurrent: (params?: { locationId?: string }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.locationId) searchParams.set("locationId", params.locationId);
+    const query = searchParams.toString();
+    return fetchApi<unknown[]>(`/api/v1/shifts/current${query ? `?${query}` : ""}`);
+  },
+
+  getPremiumStats: (params?: { locationId?: string; startDate?: string; endDate?: string }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.locationId) searchParams.set("locationId", params.locationId);
+    if (params?.startDate) searchParams.set("startDate", params.startDate);
+    if (params?.endDate) searchParams.set("endDate", params.endDate);
+    const query = searchParams.toString();
+    return fetchApi<unknown[]>(`/api/v1/shifts/premium-stats${query ? `?${query}` : ""}`);
+  },
 };

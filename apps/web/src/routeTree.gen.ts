@@ -13,11 +13,14 @@ import { Route as UnauthorizedRouteImport } from './routes/unauthorized'
 import { Route as _authenticatedIndexRouteImport } from './routes/(_authenticated)/index'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
 import { Route as _authenticatedSwapsRouteImport } from './routes/(_authenticated)/swaps'
+import { Route as _authenticatedSettingsRouteImport } from './routes/(_authenticated)/settings'
 import { Route as _authenticatedScheduleRouteImport } from './routes/(_authenticated)/schedule'
+import { Route as _authenticatedPremiumRouteImport } from './routes/(_authenticated)/premium'
 import { Route as _authenticatedOvertimeRouteImport } from './routes/(_authenticated)/overtime'
 import { Route as _authenticatedNowRouteImport } from './routes/(_authenticated)/now'
 import { Route as _authenticatedMyShiftsRouteImport } from './routes/(_authenticated)/my-shifts'
 import { Route as _authenticatedAuditRouteImport } from './routes/(_authenticated)/audit'
+import { Route as _authenticatedAnalyticsRouteImport } from './routes/(_authenticated)/analytics'
 import { Route as _authenticatedSchedulesCalendarRouteImport } from './routes/(_authenticated)/schedules/calendar'
 
 const UnauthorizedRoute = UnauthorizedRouteImport.update({
@@ -40,9 +43,19 @@ const _authenticatedSwapsRoute = _authenticatedSwapsRouteImport.update({
   path: '/swaps',
   getParentRoute: () => rootRouteImport,
 } as any)
+const _authenticatedSettingsRoute = _authenticatedSettingsRouteImport.update({
+  id: '/(_authenticated)/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const _authenticatedScheduleRoute = _authenticatedScheduleRouteImport.update({
   id: '/(_authenticated)/schedule',
   path: '/schedule',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const _authenticatedPremiumRoute = _authenticatedPremiumRouteImport.update({
+  id: '/(_authenticated)/premium',
+  path: '/premium',
   getParentRoute: () => rootRouteImport,
 } as any)
 const _authenticatedOvertimeRoute = _authenticatedOvertimeRouteImport.update({
@@ -65,6 +78,11 @@ const _authenticatedAuditRoute = _authenticatedAuditRouteImport.update({
   path: '/audit',
   getParentRoute: () => rootRouteImport,
 } as any)
+const _authenticatedAnalyticsRoute = _authenticatedAnalyticsRouteImport.update({
+  id: '/(_authenticated)/analytics',
+  path: '/analytics',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const _authenticatedSchedulesCalendarRoute =
   _authenticatedSchedulesCalendarRouteImport.update({
     id: '/(_authenticated)/schedules/calendar',
@@ -74,11 +92,14 @@ const _authenticatedSchedulesCalendarRoute =
 
 export interface FileRoutesByFullPath {
   '/unauthorized': typeof UnauthorizedRoute
+  '/analytics': typeof _authenticatedAnalyticsRoute
   '/audit': typeof _authenticatedAuditRoute
   '/my-shifts': typeof _authenticatedMyShiftsRoute
   '/now': typeof _authenticatedNowRoute
   '/overtime': typeof _authenticatedOvertimeRoute
+  '/premium': typeof _authenticatedPremiumRoute
   '/schedule': typeof _authenticatedScheduleRoute
+  '/settings': typeof _authenticatedSettingsRoute
   '/swaps': typeof _authenticatedSwapsRoute
   '/auth/login': typeof AuthLoginRoute
   '/': typeof _authenticatedIndexRoute
@@ -86,11 +107,14 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/unauthorized': typeof UnauthorizedRoute
+  '/analytics': typeof _authenticatedAnalyticsRoute
   '/audit': typeof _authenticatedAuditRoute
   '/my-shifts': typeof _authenticatedMyShiftsRoute
   '/now': typeof _authenticatedNowRoute
   '/overtime': typeof _authenticatedOvertimeRoute
+  '/premium': typeof _authenticatedPremiumRoute
   '/schedule': typeof _authenticatedScheduleRoute
+  '/settings': typeof _authenticatedSettingsRoute
   '/swaps': typeof _authenticatedSwapsRoute
   '/auth/login': typeof AuthLoginRoute
   '/': typeof _authenticatedIndexRoute
@@ -99,11 +123,14 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/unauthorized': typeof UnauthorizedRoute
+  '/(_authenticated)/analytics': typeof _authenticatedAnalyticsRoute
   '/(_authenticated)/audit': typeof _authenticatedAuditRoute
   '/(_authenticated)/my-shifts': typeof _authenticatedMyShiftsRoute
   '/(_authenticated)/now': typeof _authenticatedNowRoute
   '/(_authenticated)/overtime': typeof _authenticatedOvertimeRoute
+  '/(_authenticated)/premium': typeof _authenticatedPremiumRoute
   '/(_authenticated)/schedule': typeof _authenticatedScheduleRoute
+  '/(_authenticated)/settings': typeof _authenticatedSettingsRoute
   '/(_authenticated)/swaps': typeof _authenticatedSwapsRoute
   '/auth/login': typeof AuthLoginRoute
   '/(_authenticated)/': typeof _authenticatedIndexRoute
@@ -113,11 +140,14 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/unauthorized'
+    | '/analytics'
     | '/audit'
     | '/my-shifts'
     | '/now'
     | '/overtime'
+    | '/premium'
     | '/schedule'
+    | '/settings'
     | '/swaps'
     | '/auth/login'
     | '/'
@@ -125,11 +155,14 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/unauthorized'
+    | '/analytics'
     | '/audit'
     | '/my-shifts'
     | '/now'
     | '/overtime'
+    | '/premium'
     | '/schedule'
+    | '/settings'
     | '/swaps'
     | '/auth/login'
     | '/'
@@ -137,11 +170,14 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/unauthorized'
+    | '/(_authenticated)/analytics'
     | '/(_authenticated)/audit'
     | '/(_authenticated)/my-shifts'
     | '/(_authenticated)/now'
     | '/(_authenticated)/overtime'
+    | '/(_authenticated)/premium'
     | '/(_authenticated)/schedule'
+    | '/(_authenticated)/settings'
     | '/(_authenticated)/swaps'
     | '/auth/login'
     | '/(_authenticated)/'
@@ -150,11 +186,14 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   UnauthorizedRoute: typeof UnauthorizedRoute
+  _authenticatedAnalyticsRoute: typeof _authenticatedAnalyticsRoute
   _authenticatedAuditRoute: typeof _authenticatedAuditRoute
   _authenticatedMyShiftsRoute: typeof _authenticatedMyShiftsRoute
   _authenticatedNowRoute: typeof _authenticatedNowRoute
   _authenticatedOvertimeRoute: typeof _authenticatedOvertimeRoute
+  _authenticatedPremiumRoute: typeof _authenticatedPremiumRoute
   _authenticatedScheduleRoute: typeof _authenticatedScheduleRoute
+  _authenticatedSettingsRoute: typeof _authenticatedSettingsRoute
   _authenticatedSwapsRoute: typeof _authenticatedSwapsRoute
   AuthLoginRoute: typeof AuthLoginRoute
   _authenticatedIndexRoute: typeof _authenticatedIndexRoute
@@ -191,11 +230,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof _authenticatedSwapsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/(_authenticated)/settings': {
+      id: '/(_authenticated)/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof _authenticatedSettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/(_authenticated)/schedule': {
       id: '/(_authenticated)/schedule'
       path: '/schedule'
       fullPath: '/schedule'
       preLoaderRoute: typeof _authenticatedScheduleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/(_authenticated)/premium': {
+      id: '/(_authenticated)/premium'
+      path: '/premium'
+      fullPath: '/premium'
+      preLoaderRoute: typeof _authenticatedPremiumRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/(_authenticated)/overtime': {
@@ -226,6 +279,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof _authenticatedAuditRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/(_authenticated)/analytics': {
+      id: '/(_authenticated)/analytics'
+      path: '/analytics'
+      fullPath: '/analytics'
+      preLoaderRoute: typeof _authenticatedAnalyticsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/(_authenticated)/schedules/calendar': {
       id: '/(_authenticated)/schedules/calendar'
       path: '/schedules/calendar'
@@ -238,11 +298,14 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   UnauthorizedRoute: UnauthorizedRoute,
+  _authenticatedAnalyticsRoute: _authenticatedAnalyticsRoute,
   _authenticatedAuditRoute: _authenticatedAuditRoute,
   _authenticatedMyShiftsRoute: _authenticatedMyShiftsRoute,
   _authenticatedNowRoute: _authenticatedNowRoute,
   _authenticatedOvertimeRoute: _authenticatedOvertimeRoute,
+  _authenticatedPremiumRoute: _authenticatedPremiumRoute,
   _authenticatedScheduleRoute: _authenticatedScheduleRoute,
+  _authenticatedSettingsRoute: _authenticatedSettingsRoute,
   _authenticatedSwapsRoute: _authenticatedSwapsRoute,
   AuthLoginRoute: AuthLoginRoute,
   _authenticatedIndexRoute: _authenticatedIndexRoute,

@@ -3,6 +3,7 @@ import { Response, Router } from 'express';
 import { z } from 'zod';
 import { approveSwap } from '../application/approveSwap';
 import { requestSwap } from '../application/requestSwap';
+import { createAuditLog } from '../application/auditLog';
 import db from '../infrastructure/database';
 import { staffRepository, swapRepository } from '../infrastructure/repositories';
 import { ResponseUtils } from '../infrastructure/response';
@@ -184,6 +185,22 @@ router.post('/:id/respond', async (req: AuthenticatedRequest, res: Response) => 
       return ResponseUtils.error(res, result.error || 'Failed to respond to swap request', 400);
     }
 
+    await createAuditLog(db, {
+      userId,
+      action:
+        action === 'accept'
+          ? 'ACCEPT_SWAP'
+          : action === 'reject'
+            ? 'REJECT_SWAP'
+            : action === 'approve'
+              ? 'APPROVE_SWAP'
+              : 'CANCEL_SWAP',
+      entityType: 'SwapRequest',
+      entityId: req.params.id as string,
+      oldValue: { status: swap.status },
+      newValue: { status: (result.swap as { status?: string } | null)?.status },
+    });
+
     return ResponseUtils.success(res, result.swap, 'Swap request responded successfully');
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -221,6 +238,14 @@ router.delete('/:id', async (req: AuthenticatedRequest, res: Response) => {
 
     await swapRepository.update(req.params.id as string, {
       status: 'CANCELLED',
+    });
+
+    await createAuditLog(db, {
+      userId,
+      action: 'CANCEL_SWAP',
+      entityType: 'SwapRequest',
+      entityId: req.params.id as string,
+      newValue: { status: 'CANCELLED' },
     });
 
     return ResponseUtils.noContent(res, 'Swap request cancelled successfully');

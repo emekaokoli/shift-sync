@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import type { Knex } from 'knex';
 import { db } from '../infrastructure/database';
 import { ResponseUtils } from '../infrastructure/response';
@@ -32,21 +33,24 @@ function applyAuditFilters(query: Knex.QueryBuilder, params: Record<string, unkn
     query = query.where('action', action as string);
   }
   if (entityType) {
-    query = query.where('entity_type', entityType as string);
+    const normalizedType = (entityType as string).toLowerCase().replace(/[_\s]/g, '');
+    query = query.whereRaw("LOWER(REPLACE(entity_type, '_', '')) = ?", [normalizedType]);
   }
   if (entityId) {
     query = query.where('entity_id', entityId as string);
   }
   if (locationId) {
     query = query.where(function () {
-      this.where({ entity_type: 'LOCATION', entity_id: locationId as string }).orWhere(function () {
-        this.where('entity_type', 'SHIFT').whereIn(
-          'entity_id',
-          db('shifts')
-            .select('id')
-            .where('location_id', locationId as string)
-        );
-      });
+      this.whereRaw("LOWER(REPLACE(entity_type, '_', '')) = ?", ['location'])
+        .andWhere('entity_id', locationId as string)
+        .orWhere(function () {
+          this.whereRaw("LOWER(REPLACE(entity_type, '_', '')) = ?", ['shift']).whereIn(
+            'entity_id',
+            db('shifts')
+              .select('id')
+              .where('location_id', locationId as string)
+          );
+        });
     });
   }
   if (startDate) {
@@ -57,6 +61,46 @@ function applyAuditFilters(query: Knex.QueryBuilder, params: Record<string, unkn
   }
 
   return query;
+}
+
+const jsonValueSchema: z.ZodType<unknown> = z.lazy(() =>
+  z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.null(),
+    z.array(jsonValueSchema),
+    z.record(jsonValueSchema),
+  ])
+);
+
+const jsonOrNullSchema = z.preprocess((value) => {
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return value;
+    }
+  }
+  return value;
+}, jsonValueSchema.nullable());
+
+function safeParseJson(value: unknown) {
+  const result = jsonOrNullSchema.safeParse(value);
+  return result.success ? result.data : null;
+}
+
+function mapAuditLogRow(log: AuditLogRow) {
+  return {
+    id: log.id,
+    userId: log.user_id,
+    action: log.action,
+    entityType: log.entity_type,
+    entityId: log.entity_id,
+    oldValue: safeParseJson(log.old_value),
+    newValue: safeParseJson(log.new_value),
+    createdAt: new Date(log.created_at).toISOString(),
+  };
 }
 
 // Get audit logs with filters - Admin only
@@ -97,11 +141,7 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
     const totalPages = Math.ceil(totalCount / limitNum);
 
     // Parse JSON values
-    const parsedLogs = logs.map((log) => ({
-      ...log,
-      oldValue: log.old_value ? JSON.parse(log.old_value) : null,
-      newValue: log.new_value ? JSON.parse(log.new_value) : null,
-    }));
+    const parsedLogs = logs.map(mapAuditLogRow);
 
     return ResponseUtils.success(res, {
       data: parsedLogs,
@@ -129,15 +169,10 @@ router.get('/shifts/:shiftId', async (req: AuthenticatedRequest, res) => {
     const logs = await db('audit_logs')
       .select('*')
       .where('entity_id', shiftId)
-      .andWhere('entity_type', 'SHIFT')
+      .andWhereRaw("LOWER(REPLACE(entity_type, '_', '')) = ?", ['shift'])
       .orderBy('created_at', 'desc');
 
-    // Parse JSON values
-    const parsedLogs = logs.map((log) => ({
-      ...log,
-      oldValue: log.old_value ? JSON.parse(log.old_value) : null,
-      newValue: log.new_value ? JSON.parse(log.new_value) : null,
-    }));
+    const parsedLogs = logs.map(mapAuditLogRow);
 
     return ResponseUtils.success(res, parsedLogs);
   } catch (error) {

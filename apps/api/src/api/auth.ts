@@ -9,6 +9,7 @@ import {
 } from '../infrastructure/auth';
 import db from '../infrastructure/database';
 import { ResponseUtils } from '../infrastructure/response';
+import { createAuditLog } from '../application/auditLog';
 
 const router: Router = Router();
 
@@ -46,6 +47,14 @@ router.post('/login', async (req, res) => {
       userId: user.id,
       email: user.email,
       role: user.role,
+    });
+
+    await createAuditLog(db, {
+      userId: user.id,
+      action: 'USER_LOGIN',
+      entityType: 'User',
+      entityId: user.id,
+      newValue: { email: user.email },
     });
 
     return ResponseUtils.success(
@@ -103,6 +112,19 @@ router.post('/register', async (req, res) => {
       userId: user.id,
       email: user.email,
       role: user.role,
+    });
+
+    await createAuditLog(db, {
+      userId: user.id,
+      action: 'CREATE_USER',
+      entityType: 'User',
+      entityId: user.id,
+      newValue: {
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        timezone: user.timezone,
+      },
     });
 
     return ResponseUtils.created(

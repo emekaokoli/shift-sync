@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { assignShift } from '../application/assignShift';
 import { createShift } from '../application/createShift';
 import { updateShift } from '../application/updateShift';
+import { createAuditLog } from '../application/auditLog';
 import { suggestAlternatives, validateAssignment } from '../domain/engine';
 import { checkCutoffViolation } from '../infrastructure/cutoffValidation';
 import db from '../infrastructure/database';
@@ -474,6 +475,14 @@ router.delete('/:id', async (req: AuthenticatedRequest, res: Response) => {
 
     await shiftRepository.delete(req.params.id as string);
 
+    await createAuditLog(db, {
+      userId: req.user?.userId || 'system',
+      action: 'DELETE_SHIFT',
+      entityType: 'Shift',
+      entityId: req.params.id as string,
+      oldValue: { location_id: shift?.location_id, status: shift?.status },
+    });
+
     const io = getIO();
     if (io && shift) {
       emitShiftUpdate(io, shift.location_id, 'deleted', {
@@ -524,12 +533,12 @@ router.post('/:id/publish', async (req: AuthenticatedRequest, res: Response) => 
       updated_at: new Date(),
     });
 
-    await db('audit_logs').insert({
-      user_id: userId,
+    await createAuditLog(db, {
+      userId,
       action: 'PUBLISH_SHIFT',
-      entity_type: 'Shift',
-      entity_id: shiftId,
-      new_value: JSON.stringify({ status: 'PUBLISHED' }),
+      entityType: 'Shift',
+      entityId: shiftId,
+      newValue: { status: 'PUBLISHED' },
     });
 
     const location = await db('locations').where({ id: shiftData.location_id }).first();
@@ -819,7 +828,8 @@ router.get('/premium-stats', async (req: AuthenticatedRequest, res: Response) =>
       const hour = shiftDate.getHours();
       const day = shiftDate.getDay();
 
-      const isPremium = PREMIUM_DAYS.includes(day) && hour >= PREMIUM_START_HOUR && hour < PREMIUM_END_HOUR;
+      const isPremium =
+        PREMIUM_DAYS.includes(day) && hour >= PREMIUM_START_HOUR && hour < PREMIUM_END_HOUR;
       const hours = (shiftEnd.getTime() - shiftStart.getTime()) / (1000 * 60 * 60);
 
       if (!staffPremiumCounts[assignment.staffId]) {

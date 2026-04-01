@@ -6,8 +6,9 @@ export function showErrorToast(message: string, description?: string) {
     duration: 3000,
     style: {
       background: '#ef4444',
-      color: '#fff',
-      borderRadius: '8px',
+      color: '#ffffff',
+      borderRadius: '0.75rem',
+      boxShadow: '0 12px 30px rgba(0, 0, 0, 0.15)',
     },
     description,
   });

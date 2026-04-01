@@ -49,7 +49,7 @@ export function AuditLogViewer() {
   const [page, setPage] = useState(1);
   const [limit] = useState(20);
 
-  const shiftHistoryEnabled = Boolean(filters.entityType === 'SHIFT' && filters.entityId);
+  const shiftHistoryEnabled = Boolean(filters.entityType?.toUpperCase() === 'SHIFT' && filters.entityId);
   const shiftHistoryQuery = useShiftAuditHistory(shiftHistoryEnabled ? filters.entityId : '');
   const {
     data: auditData,
@@ -217,12 +217,12 @@ export function AuditLogViewer() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">All types</SelectItem>
-                  <SelectItem value="SHIFT">Shift</SelectItem>
-                  <SelectItem value="ASSIGNMENT">Assignment</SelectItem>
-                  <SelectItem value="SWAP_REQUEST">Swap Request</SelectItem>
-                  <SelectItem value="USER">User</SelectItem>
-                  <SelectItem value="LOCATION">Location</SelectItem>
-                  <SelectItem value="SKILL">Skill</SelectItem>
+                  <SelectItem value="Shift">Shift</SelectItem>
+                  <SelectItem value="Assignment">Assignment</SelectItem>
+                  <SelectItem value="SwapRequest">Swap Request</SelectItem>
+                  <SelectItem value="User">User</SelectItem>
+                  <SelectItem value="Location">Location</SelectItem>
+                  <SelectItem value="Skill">Skill</SelectItem>
                 </SelectContent>
               </Select>
             </div>

@@ -6,8 +6,9 @@ export function showSuccessToast(message: string) {
     duration: 3000,
     style: {
       background: '#10b981',
-      color: '#fff',
-      borderRadius: '8px',
+      color: '#ffffff',
+      borderRadius: '0.75rem',
+      boxShadow: '0 12px 30px rgba(0, 0, 0, 0.15)',
     },
   });
 }

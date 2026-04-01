@@ -1,9 +1,11 @@
 import { availabilitySchema, userUpdateSchema } from '@shift-sync/shared';
 import { Request, Response, Router } from 'express';
 import { z } from 'zod';
+import { createAuditLog } from '../application/auditLog';
+import db from '../infrastructure/database';
 import { staffRepository } from '../infrastructure/repositories';
 import { ResponseUtils } from '../infrastructure/response';
-import { authMiddleware } from './middleware/auth';
+import { authMiddleware, type AuthenticatedRequest } from './middleware/auth';
 
 const router: Router = Router();
 
@@ -46,17 +48,52 @@ router.get('/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.patch('/:id', async (req: Request, res: Response) => {
+router.patch('/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
+    const existing = await staffRepository.findById(req.params.id as string);
+    if (!existing) {
+      return ResponseUtils.notFound(res, 'Staff not found');
+    }
+
     const data = userUpdateSchema.parse(req.body);
 
     const updates: Record<string, unknown> = {};
-    if (data.name) updates.name = data.name;
-    if (data.email) updates.email = data.email;
-    if (data.timezone) updates.timezone = data.timezone;
-    if (data.desiredHours) updates.desired_hours = data.desiredHours;
+    const oldValue: Record<string, unknown> = {};
+    const newValue: Record<string, unknown> = {};
+
+    if (data.name && data.name !== existing.name) {
+      updates.name = data.name;
+      oldValue.name = existing.name;
+      newValue.name = data.name;
+    }
+    if (data.email && data.email !== existing.email) {
+      updates.email = data.email;
+      oldValue.email = existing.email;
+      newValue.email = data.email;
+    }
+    if (data.timezone && data.timezone !== existing.timezone) {
+      updates.timezone = data.timezone;
+      oldValue.timezone = existing.timezone;
+      newValue.timezone = data.timezone;
+    }
+    if (data.desiredHours !== undefined && data.desiredHours !== existing.desired_hours) {
+      updates.desired_hours = data.desiredHours;
+      oldValue.desired_hours = existing.desired_hours;
+      newValue.desired_hours = data.desiredHours;
+    }
 
     const staff = await staffRepository.update(req.params.id as string, updates);
+
+    if (Object.keys(newValue).length > 0) {
+      await createAuditLog(db, {
+        userId: req.user?.userId || 'system',
+        action: 'UPDATE_USER',
+        entityType: 'User',
+        entityId: req.params.id as string,
+        oldValue: Object.keys(oldValue).length ? oldValue : undefined,
+        newValue,
+      });
+    }
 
     return ResponseUtils.success(res, staff, 'Staff updated successfully');
   } catch (error) {
@@ -71,12 +108,22 @@ router.patch('/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.patch('/:id/notifications', async (req: Request, res: Response) => {
+router.patch('/:id/notifications', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { inApp, email } = req.body;
 
     if (typeof inApp !== 'boolean' && typeof email !== 'boolean') {
       return ResponseUtils.validationError(res, 'inApp or email must be a boolean');
+    }
+
+    const supportsNotificationPreferences =
+      await staffRepository.hasNotificationPreferencesColumn();
+    if (!supportsNotificationPreferences) {
+      return ResponseUtils.error(
+        res,
+        'Notification preferences are not configured in the database schema. Run migrations and ensure the users table includes notification_preferences.',
+        500
+      );
     }
 
     const existing = await staffRepository.findById(req.params.id as string);
@@ -90,17 +137,30 @@ router.patch('/:id/notifications', async (req: Request, res: Response) => {
       email: email !== undefined ? email : existingPrefs.email,
     };
 
-    const staff = await staffRepository.update(req.params.id as string, {
-      notification_preferences: JSON.stringify(newPrefs),
+    await staffRepository.update(req.params.id as string, {
+      notification_preferences: newPrefs as Record<string, boolean>,
     });
 
-    return ResponseUtils.success(res, { notificationPreferences: newPrefs }, 'Notification preferences updated successfully');
+    await createAuditLog(db, {
+      userId: req.user?.userId || 'system',
+      action: 'UPDATE_NOTIFICATION_PREFERENCES',
+      entityType: 'User',
+      entityId: req.params.id as string,
+      oldValue: existingPrefs,
+      newValue: newPrefs,
+    });
+
+    return ResponseUtils.success(
+      res,
+      { notificationPreferences: newPrefs },
+      'Notification preferences updated successfully'
+    );
   } catch (error) {
     return ResponseUtils.handleError(res, error);
   }
 });
 
-router.post('/:id/skills', async (req: Request, res: Response) => {
+router.post('/:id/skills', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { skillId } = req.body;
     if (!skillId) {
@@ -109,22 +169,39 @@ router.post('/:id/skills', async (req: Request, res: Response) => {
 
     const userSkill = await staffRepository.addSkill(req.params.id as string, skillId);
 
+    await createAuditLog(db, {
+      userId: req.user?.userId || 'system',
+      action: 'ADD_SKILL',
+      entityType: 'UserSkill',
+      entityId: req.params.id as string,
+      newValue: { skillId },
+    });
+
     return ResponseUtils.success(res, userSkill, 'Skill added successfully');
   } catch (error) {
     return ResponseUtils.handleError(res, error);
   }
 });
 
-router.delete('/:id/skills/:skillId', async (req: Request, res: Response) => {
+router.delete('/:id/skills/:skillId', async (req: AuthenticatedRequest, res: Response) => {
   try {
     await staffRepository.removeSkill(req.params.id as string, req.params.skillId as string);
+
+    await createAuditLog(db, {
+      userId: req.user?.userId || 'system',
+      action: 'REMOVE_SKILL',
+      entityType: 'UserSkill',
+      entityId: req.params.id as string,
+      oldValue: { skillId: req.params.skillId as string },
+    });
+
     return ResponseUtils.noContent(res, 'Skill removed successfully');
   } catch (error) {
     return ResponseUtils.handleError(res, error);
   }
 });
 
-router.post('/:id/locations', async (req: Request, res: Response) => {
+router.post('/:id/locations', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { locationId, isManager } = req.body;
     if (!locationId) {
@@ -137,22 +214,39 @@ router.post('/:id/locations', async (req: Request, res: Response) => {
       isManager
     );
 
+    await createAuditLog(db, {
+      userId: req.user?.userId || 'system',
+      action: 'ADD_LOCATION_TO_USER',
+      entityType: 'UserLocation',
+      entityId: req.params.id as string,
+      newValue: { locationId, isManager },
+    });
+
     return ResponseUtils.success(res, userLocation, 'Location added successfully');
   } catch (error) {
     return ResponseUtils.handleError(res, error);
   }
 });
 
-router.delete('/:id/locations/:locationId', async (req: Request, res: Response) => {
+router.delete('/:id/locations/:locationId', async (req: AuthenticatedRequest, res: Response) => {
   try {
     await staffRepository.removeLocation(req.params.id as string, req.params.locationId as string);
+
+    await createAuditLog(db, {
+      userId: req.user?.userId || 'system',
+      action: 'REMOVE_LOCATION_FROM_USER',
+      entityType: 'UserLocation',
+      entityId: req.params.id as string,
+      oldValue: { locationId: req.params.locationId as string },
+    });
+
     return ResponseUtils.noContent(res, 'Location removed successfully');
   } catch (error) {
     return ResponseUtils.handleError(res, error);
   }
 });
 
-router.post('/:id/availability', async (req: Request, res: Response) => {
+router.post('/:id/availability', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const data = availabilitySchema.parse(req.body);
 
@@ -162,6 +256,20 @@ router.post('/:id/availability', async (req: Request, res: Response) => {
       end_time: data.endTime,
       is_recurring: data.isRecurring,
       specific_date: data.specificDate || null,
+    });
+
+    await createAuditLog(db, {
+      userId: req.user?.userId || 'system',
+      action: 'SET_AVAILABILITY',
+      entityType: 'Availability',
+      entityId: req.params.id as string,
+      newValue: {
+        dayOfWeek: data.dayOfWeek,
+        startTime: data.startTime,
+        endTime: data.endTime,
+        isRecurring: data.isRecurring,
+        specificDate: data.specificDate || null,
+      },
     });
 
     return ResponseUtils.created(res, availability, 'Availability set successfully');
@@ -177,9 +285,17 @@ router.post('/:id/availability', async (req: Request, res: Response) => {
   }
 });
 
-router.delete('/availability/:id', async (req: Request, res: Response) => {
+router.delete('/availability/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
     await staffRepository.deleteAvailability(req.params.id as string);
+
+    await createAuditLog(db, {
+      userId: req.user?.userId || 'system',
+      action: 'DELETE_AVAILABILITY',
+      entityType: 'Availability',
+      entityId: req.params.id as string,
+    });
+
     return ResponseUtils.noContent(res, 'Availability deleted successfully');
   } catch (error) {
     return ResponseUtils.handleError(res, error);

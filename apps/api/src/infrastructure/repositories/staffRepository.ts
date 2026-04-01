@@ -43,12 +43,28 @@ function getDb(trx?: Knex.Transaction): Knex {
   return trx || db;
 }
 
+let hasNotificationPreferencesColumn: boolean | null = null;
+
+async function notificationPreferencesColumnExists(trx?: Knex.Transaction): Promise<boolean> {
+  if (hasNotificationPreferencesColumn !== null) {
+    return hasNotificationPreferencesColumn;
+  }
+
+  const queryDb = getDb(trx);
+  hasNotificationPreferencesColumn = await queryDb.schema.hasColumn('users', 'notification_preferences');
+  return hasNotificationPreferencesColumn;
+}
+
 export const staffRepository = {
-  findMany(filter?: StaffFilter, trx?: Knex.Transaction): Promise<Omit<User, 'password_hash'>[]> {
+  async findMany(filter?: StaffFilter, trx?: Knex.Transaction): Promise<Omit<User, 'password_hash'>[]> {
     const queryDb = getDb(trx);
-    let query = queryDb('users')
-      .select('id', 'email', 'name', 'role', 'timezone', 'desired_hours', 'notification_preferences', 'created_at')
-      .orderBy('name', 'asc');
+    const columns = ['id', 'email', 'name', 'role', 'timezone', 'desired_hours', 'created_at'];
+
+    if (await notificationPreferencesColumnExists(trx)) {
+      columns.push('notification_preferences');
+    }
+
+    let query = queryDb('users').select(columns).orderBy('name', 'asc');
 
     if (filter?.role) {
       query = query.where('role', filter.role);
@@ -57,11 +73,17 @@ export const staffRepository = {
     return query.then((rows) => rows);
   },
 
-  findById(id: string, trx?: Knex.Transaction): Promise<Omit<User, 'password_hash'> | null> {
+  async findById(id: string, trx?: Knex.Transaction): Promise<Omit<User, 'password_hash'> | null> {
     const queryDb = getDb(trx);
+    const columns = ['id', 'email', 'name', 'role', 'timezone', 'desired_hours', 'created_at'];
+
+    if (await notificationPreferencesColumnExists(trx)) {
+      columns.push('notification_preferences');
+    }
+
     return queryDb('users')
       .where({ id })
-      .select('id', 'email', 'name', 'role', 'timezone', 'desired_hours', 'notification_preferences', 'created_at')
+      .select(columns)
       .first()
       .then((row) => row || null);
   },
@@ -77,14 +99,26 @@ export const staffRepository = {
 
   async update(
     id: string,
-    data: Partial<Pick<User, 'email' | 'name' | 'role' | 'timezone' | 'desired_hours' | 'notification_preferences'>>,
+    data: Partial<{email: string; name: string; role: string; timezone: string; desired_hours: number; notification_preferences: Record<string, boolean>}>,
     trx?: Knex.Transaction
   ): Promise<Omit<User, 'password_hash'>> {
     const queryDb = getDb(trx);
+    const supportsNotificationPreferences = await notificationPreferencesColumnExists(trx);
+    const dataToUpdate = { ...data } as Record<string, unknown>;
+
+    if (!supportsNotificationPreferences && 'notification_preferences' in dataToUpdate) {
+      delete dataToUpdate.notification_preferences;
+    }
+
+    const returningColumns = ['id', 'email', 'name', 'role', 'timezone', 'desired_hours', 'created_at'];
+    if (supportsNotificationPreferences) {
+      returningColumns.push('notification_preferences');
+    }
+
     const rows = await queryDb('users')
       .where({ id })
-      .update({ ...data, updated_at: queryDb.fn.now() })
-      .returning(['id', 'email', 'name', 'role', 'timezone', 'desired_hours', 'notification_preferences', 'created_at']);
+      .update({ ...dataToUpdate, updated_at: queryDb.fn.now() })
+      .returning(returningColumns);
     return rows[0];
   },
 
@@ -222,6 +256,10 @@ export const staffRepository = {
         is_manager: row.is_manager as boolean,
         location: row.location as { id: string; name: string },
       }));
+  },
+
+  async hasNotificationPreferencesColumn(trx?: Knex.Transaction): Promise<boolean> {
+    return notificationPreferencesColumnExists(trx);
   },
 
   async addLocationWithValidation(
