@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { User } from '../../../../shared/src/types';
+import type { User } from '@shift-sync/shared';
 
 const ACCESS_TOKEN_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
 const REFRESH_TOKEN_EXPIRY_MS = 2 * 60 * 60 * 1000; // 2 hours

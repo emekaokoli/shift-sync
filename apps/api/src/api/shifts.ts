@@ -3,37 +3,88 @@ import {
   shiftSchema,
   shiftUpdateSchema,
 } from '@shift-sync/shared';
-import { Request, Response, Router } from 'express';
+import { Response, Router } from 'express';
 import { z } from 'zod';
 import { assignShift } from '../application/assignShift';
 import { createShift } from '../application/createShift';
 import { updateShift } from '../application/updateShift';
 import { suggestAlternatives, validateAssignment } from '../domain/engine';
-import { shiftRepository } from '../infrastructure/repositories';
-import { ResponseUtils } from '../infrastructure/response';
-import { getIO, emitShiftUpdate, emitNotification, emitAssignment } from '../infrastructure/socket';
 import db from '../infrastructure/database';
+import {
+  shiftRepository,
+  staffRepository,
+} from '../infrastructure/repositories';
+import { ResponseUtils } from '../infrastructure/response';
+import {
+  emitAssignment,
+  emitNotification,
+  emitShiftUpdate,
+  getIO,
+} from '../infrastructure/socket';
 import { authMiddleware, type AuthenticatedRequest } from './middleware/auth';
 
 const router: Router = Router();
 
 router.use(authMiddleware);
 
-const getQueryString = (
-  value: unknown,
-): string | undefined => {
+const getQueryString = (value: unknown): string | undefined => {
   if (!value) return undefined;
   if (Array.isArray(value)) return String(value[0]);
   if (typeof value === 'object') return undefined;
   return String(value);
 };
 
-router.get('/', async (req: Request, res: Response) => {
+async function getManagerLocationIds(user?: AuthenticatedRequest['user']) {
+  if (!user || user.role !== 'MANAGER') {
+    return null;
+  }
+
+  return staffRepository.findUserLocationIds(user.userId, true);
+}
+
+function isManagerUser(user?: AuthenticatedRequest['user']) {
+  return user?.role === 'MANAGER';
+}
+
+async function authorizeShiftAccess(
+  shiftId: string,
+  user?: AuthenticatedRequest['user'],
+) {
+  const shift = await shiftRepository.findById(shiftId);
+  if (!shift) {
+    return { shift: null, error: 'Shift not found' };
+  }
+
+  if (isManagerUser(user)) {
+    const allowedLocationIds = await getManagerLocationIds(user);
+    if (!allowedLocationIds?.includes(shift.location_id)) {
+      return { shift: null, error: 'Not authorized to access this shift' };
+    }
+  }
+
+  return { shift, error: undefined };
+}
+
+router.get('/', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { locationId, status, startDate, endDate } = req.query;
+    const requestedLocationId = getQueryString(locationId);
+    const managerLocationIds = await getManagerLocationIds(req.user);
+
+    if (
+      managerLocationIds &&
+      requestedLocationId &&
+      !managerLocationIds.includes(requestedLocationId)
+    ) {
+      return ResponseUtils.forbidden(
+        res,
+        'Not authorized to view shifts for this location',
+      );
+    }
 
     const shifts = await shiftRepository.findMany({
-      locationId: getQueryString(locationId),
+      locationId: requestedLocationId,
+      locationIds: managerLocationIds ?? undefined,
       status: getQueryString(status),
       startDate: getQueryString(startDate)
         ? new Date(getQueryString(startDate)!)
@@ -49,9 +100,9 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
-router.get('/my-shifts', async (req: Request, res: Response) => {
+router.get('/my-shifts', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const userId = (req as any).user?.userId;
+    const userId = req.user?.userId;
 
     if (!userId) {
       return ResponseUtils.unauthorized(res, 'User not authenticated');
@@ -65,108 +116,149 @@ router.get('/my-shifts', async (req: Request, res: Response) => {
   }
 });
 
-router.get('/overtime-stats', async (req: Request, res: Response) => {
-  try {
-    const locationId = req.query.locationId as string | undefined;
-    const weekStart = req.query.weekStart as string | undefined;
-    
-    const startOfWeek = weekStart 
-      ? new Date(weekStart) 
-      : new Date(new Date().setDate(new Date().getDate() - new Date().getDay()));
-    startOfWeek.setHours(0, 0, 0, 0);
-    
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(endOfWeek.getDate() + 7);
+router.get(
+  '/overtime-stats',
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const locationId = req.query.locationId as string | undefined;
+      const weekStart = req.query.weekStart as string | undefined;
+      const managerLocationIds = await getManagerLocationIds(req.user);
 
-    let query = db('shift_assignments')
-      .join('shifts', 'shift_assignments.shift_id', 'shifts.id')
-      .join('users', 'shift_assignments.staff_id', 'users.id')
-      .select(
-        'shift_assignments.staff_id as staffId',
-        'users.name as staffName',
-        'shifts.start_time',
-        'shifts.end_time',
-        'shifts.location_id'
-      )
-      .where('shifts.start_time', '>=', startOfWeek)
-      .where('shifts.start_time', '<', endOfWeek)
-      .where('shifts.status', 'PUBLISHED');
-
-    if (locationId) {
-      query = query.where('shifts.location_id', locationId);
-    }
-
-    const assignments = await query;
-
-    const staffHours: Record<string, {
-      staffId: string;
-      staffName: string;
-      weeklyHours: number;
-      dailyHours: { date: string; hours: number }[];
-    }> = {};
-
-    const weeklyLimit = 40;
-    const dailyLimit = 10;
-
-    for (const assignment of assignments) {
-      const staffId = assignment.staff_id;
-      const start = new Date(assignment.start_time);
-      const end = new Date(assignment.end_time);
-      const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-      const dateKey = start.toISOString().split('T')[0];
-
-      if (!staffHours[staffId]) {
-        staffHours[staffId] = {
-          staffId,
-          staffName: assignment.staff_name,
-          weeklyHours: 0,
-          dailyHours: [],
-        };
+      if (
+        managerLocationIds &&
+        locationId &&
+        !managerLocationIds.includes(locationId)
+      ) {
+        return ResponseUtils.forbidden(
+          res,
+          'Not authorized to view overtime stats for this location',
+        );
       }
 
-      staffHours[staffId].weeklyHours += hours;
+      const startOfWeek = weekStart
+        ? new Date(weekStart)
+        : new Date(
+            new Date().setDate(new Date().getDate() - new Date().getDay()),
+          );
+      startOfWeek.setHours(0, 0, 0, 0);
 
-      const existingDay = staffHours[staffId].dailyHours.find(d => d.date === dateKey);
-      if (existingDay) {
-        existingDay.hours += hours;
-      } else {
-        staffHours[staffId].dailyHours.push({ date: dateKey, hours });
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(endOfWeek.getDate() + 7);
+
+      let query = db('shift_assignments')
+        .join('shifts', 'shift_assignments.shift_id', 'shifts.id')
+        .join('users', 'shift_assignments.staff_id', 'users.id')
+        .select(
+          'shift_assignments.staff_id as staffId',
+          'users.name as staffName',
+          'shifts.start_time',
+          'shifts.end_time',
+          'shifts.location_id',
+        )
+        .where('shifts.start_time', '>=', startOfWeek)
+        .where('shifts.start_time', '<', endOfWeek)
+        .where('shifts.status', 'PUBLISHED');
+
+      if (locationId) {
+        query = query.where('shifts.location_id', locationId);
       }
+      if (managerLocationIds) {
+        if (managerLocationIds.length === 0) {
+          query = query.whereRaw('1 = 0');
+        } else {
+          query = query.whereIn('shifts.location_id', managerLocationIds);
+        }
+      }
+
+      const assignments = await query;
+
+      const staffHours: Record<
+        string,
+        {
+          staffId: string;
+          staffName: string;
+          weeklyHours: number;
+          dailyHours: { date: string; hours: number }[];
+        }
+      > = {};
+
+      const weeklyLimit = 40;
+      const dailyLimit = 10;
+
+      for (const assignment of assignments) {
+        const staffId = assignment.staff_id;
+        const start = new Date(assignment.start_time);
+        const end = new Date(assignment.end_time);
+        const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+        const dateKey = start.toISOString().split('T')[0];
+
+        if (!staffHours[staffId]) {
+          staffHours[staffId] = {
+            staffId,
+            staffName: assignment.staff_name,
+            weeklyHours: 0,
+            dailyHours: [],
+          };
+        }
+
+        staffHours[staffId].weeklyHours += hours;
+
+        const existingDay = staffHours[staffId].dailyHours.find(
+          (d) => d.date === dateKey,
+        );
+        if (existingDay) {
+          existingDay.hours += hours;
+        } else {
+          staffHours[staffId].dailyHours.push({ date: dateKey, hours });
+        }
+      }
+
+      const result = Object.values(staffHours).map((staff) => ({
+        ...staff,
+        isOvertime: staff.weeklyHours > weeklyLimit,
+        isWarning: staff.weeklyHours >= 35,
+        dailyOvertime: staff.dailyHours.some((d) => d.hours > dailyLimit),
+      }));
+
+      const totalHours = result.reduce((sum, s) => sum + s.weeklyHours, 0);
+      const atLimitCount = result.filter(
+        (s) => s.isWarning && !s.isOvertime,
+      ).length;
+      const overLimitCount = result.filter((s) => s.isOvertime).length;
+
+      return ResponseUtils.success(
+        res,
+        {
+          staff: result,
+          summary: {
+            totalHours: Math.round(totalHours * 10) / 10,
+            staffCount: result.length,
+            atLimitCount,
+            overLimitCount,
+            weekStart: startOfWeek.toISOString(),
+            weekEnd: endOfWeek.toISOString(),
+          },
+        },
+        'Overtime stats fetched successfully',
+      );
+    } catch (error) {
+      return ResponseUtils.handleError(res, error);
     }
+  },
+);
 
-    const result = Object.values(staffHours).map(staff => ({
-      ...staff,
-      isOvertime: staff.weeklyHours > weeklyLimit,
-      isWarning: staff.weeklyHours >= 35,
-      dailyOvertime: staff.dailyHours.some(d => d.hours > dailyLimit),
-    }));
-
-    const totalHours = result.reduce((sum, s) => sum + s.weeklyHours, 0);
-    const atLimitCount = result.filter(s => s.isWarning && !s.isOvertime).length;
-    const overLimitCount = result.filter(s => s.isOvertime).length;
-
-    return ResponseUtils.success(res, {
-      staff: result,
-      summary: {
-        totalHours: Math.round(totalHours * 10) / 10,
-        staffCount: result.length,
-        atLimitCount,
-        overLimitCount,
-        weekStart: startOfWeek.toISOString(),
-        weekEnd: endOfWeek.toISOString(),
-      },
-    }, 'Overtime stats fetched successfully');
-  } catch (error) {
-    return ResponseUtils.handleError(res, error);
-  }
-});
-
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const shift = await shiftRepository.findById(req.params.id as string);
+    const { shift, error } = await authorizeShiftAccess(
+      req.params.id as string,
+      req.user,
+    );
 
-    if (!shift) {
-      return ResponseUtils.notFound(res, 'Shift not found');
+    if (error) {
+      if (error === 'Shift not found') {
+        return ResponseUtils.notFound(res, error);
+      }
+      return ResponseUtils.forbidden(res, error);
     }
 
     return ResponseUtils.success(res, shift, 'Shift fetched successfully');
@@ -180,6 +272,23 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
     const data = shiftSchema.parse(req.body);
     const userId = req.user?.userId || 'system';
 
+    if (req.user?.role === 'STAFF') {
+      return ResponseUtils.forbidden(
+        res,
+        'Only managers and admins can create shifts',
+      );
+    }
+
+    if (req.user?.role === 'MANAGER') {
+      const managerLocationIds = await getManagerLocationIds(req.user);
+      if (!managerLocationIds?.includes(data.locationId)) {
+        return ResponseUtils.forbidden(
+          res,
+          'Not authorized to create shifts for this location',
+        );
+      }
+    }
+
     const result = await createShift({
       location_id: data.locationId,
       required_skill_id: data.requiredSkillId,
@@ -191,7 +300,11 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
     });
 
     if (!result.success) {
-      return ResponseUtils.error(res, result.error || 'Failed to create shift', 400);
+      return ResponseUtils.error(
+        res,
+        result.error || 'Failed to create shift',
+        400,
+      );
     }
 
     const io = getIO();
@@ -200,7 +313,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
         shift: result.shift,
         createdBy: userId,
       });
-      
+
       emitNotification(io, userId, {
         type: 'shift',
         message: `New shift created at ${new Date(data.startTime).toLocaleString()}`,
@@ -208,7 +321,11 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
       });
     }
 
-    return ResponseUtils.created(res, result.shift, 'Shift created successfully');
+    return ResponseUtils.created(
+      res,
+      result.shift,
+      'Shift created successfully',
+    );
   } catch (error) {
     if (error instanceof z.ZodError) {
       return ResponseUtils.validationError(
@@ -227,6 +344,35 @@ router.patch('/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const data = shiftUpdateSchema.parse(req.body);
     const userId = req.user?.userId || 'system';
+
+    const { shift, error } = await authorizeShiftAccess(
+      req.params.id as string,
+      req.user,
+    );
+
+    if (error) {
+      if (error === 'Shift not found') {
+        return ResponseUtils.notFound(res, error);
+      }
+      return ResponseUtils.forbidden(res, error);
+    }
+
+    if (req.user?.role === 'STAFF') {
+      return ResponseUtils.forbidden(
+        res,
+        'Only managers and admins can update shifts',
+      );
+    }
+
+    if (req.user?.role === 'MANAGER') {
+      const managerLocationIds = await getManagerLocationIds(req.user);
+      if (data.locationId && !managerLocationIds?.includes(data.locationId)) {
+        return ResponseUtils.forbidden(
+          res,
+          'Not authorized to update shifts for this location',
+        );
+      }
+    }
 
     const updates: {
       start_time?: Date;
@@ -265,6 +411,15 @@ router.patch('/:id', async (req: AuthenticatedRequest, res: Response) => {
       );
     }
 
+    const io = getIO();
+    if (io && result.shift) {
+      const updatedShift = result.shift as { id: string; location_id: string };
+      emitShiftUpdate(io, updatedShift.location_id, 'updated', {
+        shiftId: updatedShift.id,
+        updatedBy: userId,
+      });
+    }
+
     return ResponseUtils.success(
       res,
       result.shift,
@@ -284,82 +439,137 @@ router.patch('/:id', async (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', async (req: AuthenticatedRequest, res: Response) => {
   try {
+    const { shift, error } = await authorizeShiftAccess(
+      req.params.id as string,
+      req.user,
+    );
+
+    if (error) {
+      if (error === 'Shift not found') {
+        return ResponseUtils.notFound(res, error);
+      }
+      return ResponseUtils.forbidden(res, error);
+    }
+
     await shiftRepository.delete(req.params.id as string);
+
+    const io = getIO();
+    if (io && shift) {
+      emitShiftUpdate(io, shift.location_id, 'deleted', {
+        shiftId: req.params.id as string,
+      });
+    }
+
     return ResponseUtils.noContent(res, 'Shift deleted successfully');
   } catch (error) {
     return ResponseUtils.handleError(res, error);
   }
 });
 
-router.post('/:id/publish', async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const userId = req.user?.userId || 'system';
-    const shiftId = req.params.id as string;
-    
-    const shift = await shiftRepository.findById(shiftId);
-    if (!shift) {
-      return ResponseUtils.notFound(res, 'Shift not found');
-    }
+router.post(
+  '/:id/publish',
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const userId = req.user?.userId || 'system';
+      const shiftId = req.params.id as string;
 
-    const shiftData = shift as { id: string; location_id: string; start_time: Date };
-    
-    await db('shifts')
-      .where({ id: shiftId })
-      .update({
+      const { shift, error } = await authorizeShiftAccess(shiftId, req.user);
+      if (error) {
+        if (error === 'Shift not found') {
+          return ResponseUtils.notFound(res, error);
+        }
+        return ResponseUtils.forbidden(res, error);
+      }
+
+      if (req.user?.role === 'STAFF') {
+        return ResponseUtils.forbidden(
+          res,
+          'Only managers and admins can publish shifts',
+        );
+      }
+
+      const shiftData = shift as {
+        id: string;
+        location_id: string;
+        start_time: Date;
+      };
+
+      await db('shifts').where({ id: shiftId }).update({
         status: 'PUBLISHED',
         published_at: new Date(),
         updated_at: new Date(),
       });
 
-    await db('audit_logs').insert({
-      user_id: userId,
-      action: 'PUBLISH_SHIFT',
-      entity_type: 'Shift',
-      entity_id: shiftId,
-      new_value: JSON.stringify({ status: 'PUBLISHED' }),
-    });
-
-    const location = await db('locations').where({ id: shiftData.location_id }).first();
-    const notificationMessage = `New shift published at ${location?.name || 'a location'}`;
-
-    const [notification] = await db('notifications')
-      .insert({
+      await db('audit_logs').insert({
         user_id: userId,
-        type: 'shift',
-        message: notificationMessage,
-        read: false,
-        data: JSON.stringify({ shiftId, action: 'published' }),
-      })
-      .returning('*');
+        action: 'PUBLISH_SHIFT',
+        entity_type: 'Shift',
+        entity_id: shiftId,
+        new_value: JSON.stringify({ status: 'PUBLISHED' }),
+      });
 
-    const io = getIO();
-    if (io) {
-      emitShiftUpdate(io, shiftData.location_id, 'published', {
-        shiftId,
-        publishedBy: userId,
-      });
-      
-      emitNotification(io, userId, {
-        id: notification.id,
-        type: 'shift',
-        message: notificationMessage,
-        data: { shiftId, action: 'published' },
-        createdAt: notification.created_at,
-      });
+      const location = await db('locations')
+        .where({ id: shiftData.location_id })
+        .first();
+      const notificationMessage = `New shift published at ${location?.name || 'a location'}`;
+
+      const [notification] = await db('notifications')
+        .insert({
+          user_id: userId,
+          type: 'shift',
+          message: notificationMessage,
+          read: false,
+          data: JSON.stringify({ shiftId, action: 'published' }),
+        })
+        .returning('*');
+
+      const io = getIO();
+      if (io) {
+        emitShiftUpdate(io, shiftData.location_id, 'published', {
+          shiftId,
+          publishedBy: userId,
+        });
+
+        emitNotification(io, userId, {
+          id: notification.id,
+          type: 'shift',
+          message: notificationMessage,
+          data: { shiftId, action: 'published' },
+          createdAt: notification.created_at,
+        });
+      }
+
+      return ResponseUtils.success(res, shift, 'Shift published successfully');
+    } catch (error) {
+      return ResponseUtils.handleError(res, error);
     }
-
-    return ResponseUtils.success(res, shift, 'Shift published successfully');
-  } catch (error) {
-    return ResponseUtils.handleError(res, error);
-  }
-});
+  },
+);
 
 router.post('/:id/assign', async (req: AuthenticatedRequest, res: Response) => {
   try {
+    if (req.user?.role === 'STAFF') {
+      return ResponseUtils.forbidden(
+        res,
+        'Only managers and admins can assign staff to shifts',
+      );
+    }
+
     const { staffId, version } = assignShiftSchema.parse(req.body);
     const assignedBy = req.user?.userId || 'system';
+
+    const { shift, error } = await authorizeShiftAccess(
+      req.params.id as string,
+      req.user,
+    );
+    if (error) {
+      if (error === 'Shift not found') {
+        return ResponseUtils.notFound(res, error);
+      }
+      return ResponseUtils.forbidden(res, error);
+    }
 
     const result = await assignShift({
       shiftId: req.params.id as string,
@@ -376,11 +586,9 @@ router.post('/:id/assign', async (req: AuthenticatedRequest, res: Response) => {
       );
     }
 
-    const shift = await shiftRepository.findById(req.params.id as string);
-    
+    const shiftData = shift as { location_id: string };
     const io = getIO();
-    if (io && shift) {
-      const shiftData = shift as { location_id: string };
+    if (io && shiftData) {
       emitAssignment(io, shiftData.location_id, 'created', {
         shiftId: req.params.id as string,
         staffId,
@@ -409,55 +617,83 @@ router.post('/:id/assign', async (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
-router.post('/:id/validate', async (req: Request, res: Response) => {
-  try {
-    const { staffId } = req.body;
-    if (!staffId) {
-      return ResponseUtils.validationError(res, 'staffId is required');
+router.post(
+  '/:id/validate',
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { staffId } = req.body;
+      if (!staffId) {
+        return ResponseUtils.validationError(res, 'staffId is required');
+      }
+
+      const { shift, error } = await authorizeShiftAccess(
+        req.params.id as string,
+        req.user,
+      );
+      if (error) {
+        if (error === 'Shift not found') {
+          return ResponseUtils.notFound(res, error);
+        }
+        return ResponseUtils.forbidden(res, error);
+      }
+
+      const result = await validateAssignment({
+        db,
+        staffId,
+        shiftId: req.params.id as string,
+      });
+
+      if (!result.ok) {
+        const suggestions = await suggestAlternatives({
+          db,
+          shiftId: req.params.id as string,
+        });
+        return ResponseUtils.success(
+          res,
+          { ...result, suggestions },
+          'Validation failed',
+        );
+      }
+
+      return ResponseUtils.success(res, result, 'Validation successful');
+    } catch (error) {
+      return ResponseUtils.handleError(res, error);
     }
+  },
+);
 
-    const result = await validateAssignment({
-      db,
-      staffId,
-      shiftId: req.params.id as string,
-    });
+router.get(
+  '/:id/suggestions',
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const limit = parseInt(getQueryString(req.query.limit) || '3');
 
-    if (!result.ok) {
+      const { shift, error } = await authorizeShiftAccess(
+        req.params.id as string,
+        req.user,
+      );
+      if (error) {
+        if (error === 'Shift not found') {
+          return ResponseUtils.notFound(res, error);
+        }
+        return ResponseUtils.forbidden(res, error);
+      }
+
       const suggestions = await suggestAlternatives({
         db,
         shiftId: req.params.id as string,
+        limit,
       });
+
       return ResponseUtils.success(
         res,
-        { ...result, suggestions },
-        'Validation failed',
+        suggestions,
+        'Suggestions fetched successfully',
       );
+    } catch (error) {
+      return ResponseUtils.handleError(res, error);
     }
-
-    return ResponseUtils.success(res, result, 'Validation successful');
-  } catch (error) {
-    return ResponseUtils.handleError(res, error);
-  }
-});
-
-router.get('/:id/suggestions', async (req: Request, res: Response) => {
-  try {
-    const limit = parseInt(getQueryString(req.query.limit) || '3');
-
-    const suggestions = await suggestAlternatives({
-      db,
-      shiftId: req.params.id as string,
-      limit,
-    });
-
-    return ResponseUtils.success(
-      res,
-      suggestions,
-      'Suggestions fetched successfully',
-    );
-  } catch (error) {
-    return ResponseUtils.handleError(res, error);
-  }
-});
+  },
+);
 
 export default router;

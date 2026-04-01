@@ -31,6 +31,7 @@ export interface SwapFilter {
   status?: string;
   shiftId?: string;
   userId?: string;
+  locationIds?: string[];
 }
 
 function getDb(trx?: Knex.Transaction): Knex {
@@ -54,6 +55,7 @@ export const swapRepository = {
         'swap_requests.created_at',
         'swap_requests.updated_at',
       )
+      .leftJoin('shifts', 'swap_requests.shift_id', 'shifts.id')
       .orderBy('swap_requests.created_at', 'desc');
 
     if (filter?.status) {
@@ -69,6 +71,13 @@ export const swapRepository = {
           filter.userId,
         );
       });
+    }
+    if (filter?.locationIds) {
+      if (filter.locationIds.length === 0) {
+        query = query.whereRaw('1 = 0');
+      } else {
+        query = query.whereIn('shifts.location_id', filter.locationIds);
+      }
     }
 
     return query;
@@ -112,6 +121,13 @@ export const swapRepository = {
           filter.userId,
         );
       });
+    }
+    if (filter?.locationIds) {
+      if (filter.locationIds.length === 0) {
+        query = query.whereRaw('1 = 0');
+      } else {
+        query = query.whereIn('shifts.location_id', filter.locationIds);
+      }
     }
 
     return query;

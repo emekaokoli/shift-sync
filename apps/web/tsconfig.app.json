@@ -31,6 +31,12 @@
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      "@shift-sync/shared": [
+        "../shared/src/index.ts"
+      ],
+      "@shift-sync/shared/*": [
+        "../shared/src/*"
       ]
     }
   },

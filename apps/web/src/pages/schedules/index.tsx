@@ -161,7 +161,7 @@ export function Schedule() {
           const dayShifts = shiftsByDay[dayStr] || [];
 
           return (
-            <Card key={dayStr} className="min-h-[300px]">
+            <Card key={dayStr} className='min-h-75'>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium">
                   {day.format("ddd")}

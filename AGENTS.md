@@ -34,19 +34,19 @@
 ```
 prioritysoft/
 ├── apps/
-│   ├── backend/        # Express API server
-│   ├── web/            # React SPA
-│   └── shared/         # Shared types, schemas, constants
-├── package.json        # Monorepo scripts
+│   ├── api/              # Express API server (@shift-sync/api)
+│   └── web/              # React SPA (@shift-sync/web)
+├── shared/               # Shared types, schemas, constants (@shift-sync/shared)
+├── package.json          # Monorepo scripts
 ├── pnpm-workspace.yaml
-└── AGENTS.md           # This file
+└── AGENTS.md             # This file
 ```
 
 ---
 
-### apps/backend/src/
+### apps/api/src/
 ```
-backend/src/
+api/src/
 ├── index.ts                    # Entry point - creates Express app + HTTP server
 ├── api/                       # Express route handlers
 │   ├── index.ts               # Re-exports all routers
@@ -107,7 +107,8 @@ backend/src/
 │   ├── logger.ts            # Pino logger
 │   ├── rateLimit.ts         # API rate limiting
 │   └── error.ts             # Custom error classes
-└── env.d.ts                  # Environment type declarations
+├── env.d.ts                  # Environment type declarations
+└── knexfile.ts               # Knex configuration
 ```
 
 ---
@@ -331,7 +332,7 @@ All endpoints are prefixed with `/api/v1/`
 
 ### Rule 1: Types in `apps/shared`
 
-Always define shared types in `apps/shared/src/types.ts`. Never define types in `apps/backend` or `apps/web`.
+Always define shared types in `shared/src/types.ts`. Never define types in `apps/api` or `apps/web`.
 
 ```typescript
 // ✅ GOOD: Define in apps/shared/src/types.ts
@@ -341,7 +342,7 @@ export interface User {
   role: Role;
 }
 
-// ❌ BAD: Define in apps/backend/src/api/users.ts
+// ❌ BAD: Define in apps/api/src/api/users.ts
 interface User {
   id: string;
   name: string;
@@ -522,8 +523,8 @@ pnpm dev:web             # Start frontend only
 ```
 
 ### Adding a New API Endpoint
-1. Add route in appropriate file in `apps/backend/src/api/`
-2. Use repository methods from `apps/backend/src/infrastructure/repositories/`
+1. Add route in appropriate file in `apps/api/src/api/`
+2. Use repository methods from `apps/api/src/infrastructure/repositories/`
 3. Return responses using `ResponseUtils`
 4. Add Zod validation schema in `apps/shared/src/schemas.ts`
 5. Export type in `apps/shared/src/index.ts`

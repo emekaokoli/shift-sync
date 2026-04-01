@@ -303,6 +303,24 @@ export const staffRepository = {
       .del();
   },
 
+  async findUserLocationIds(
+    userId: string,
+    onlyManaged = false,
+    trx?: Knex.Transaction,
+  ): Promise<string[]> {
+    const queryDb = getDb(trx);
+    const rows = await queryDb('user_locations')
+      .where({ user_id: userId })
+      .modify((queryBuilder) => {
+        if (onlyManaged) {
+          queryBuilder.where('is_manager', true);
+        }
+      })
+      .select('location_id');
+
+    return (rows as { location_id: string }[]).map((row) => row.location_id);
+  },
+
   async addAvailability(
     userId: string,
     data: {

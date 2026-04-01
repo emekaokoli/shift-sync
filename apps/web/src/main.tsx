@@ -22,7 +22,7 @@ export const queryClient = new QueryClient({
 export const router = createRouter({
   routeTree,
   context: {
-    auth: { user: null },
+    auth: { user: null, isAuthenticated: false },
     queryClient: queryClient,
   },
 })

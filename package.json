@@ -6,7 +6,7 @@
     "dev:all": "pnpm --parallel -r dev",
     "dev:api": "pnpm --filter @shift-sync/api dev",
     "dev:web": "pnpm --filter @shift-sync/web dev",
-    "build": "pnpm --filter @shift-sync/api build && pnpm --filter @shift-sync/web build",
+    "build": "pnpm --filter @shift-sync/shared build && pnpm --filter @shift-sync/api build && pnpm --filter @shift-sync/web build",
     "start": "pnpm run build && pnpm run db:migrate && pnpm run db:seed && pnpm --parallel run start:prod",
     "start:prod": "pnpm --filter @shift-sync/api start & pnpm --filter @shift-sync/web start",
     "db:migrate": "pnpm --filter @shift-sync/api run db:migrate",

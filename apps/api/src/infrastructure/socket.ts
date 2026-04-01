@@ -99,13 +99,20 @@ export function getIO() {
 export function emitShiftUpdate(
   io: ReturnType<typeof setupSocketIO>,
   locationId: string,
-  action: string,
+  action: 'created' | 'updated' | 'published' | 'deleted',
   data: Record<string, unknown>,
 ) {
-  io.to(`location:${locationId}`).emit(REALTIME_EVENTS.SHIFT_UPDATED, {
-    action,
-    ...data,
-  });
+  const eventMap: Record<
+    'created' | 'updated' | 'published' | 'deleted',
+    string
+  > = {
+    created: REALTIME_EVENTS.SHIFT_CREATED,
+    updated: REALTIME_EVENTS.SHIFT_UPDATED,
+    published: REALTIME_EVENTS.SHIFT_PUBLISHED,
+    deleted: REALTIME_EVENTS.SHIFT_DELETED,
+  };
+
+  io.to(`location:${locationId}`).emit(eventMap[action], data);
 }
 
 export function emitAssignment(

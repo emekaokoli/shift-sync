@@ -32,6 +32,7 @@ export interface ShiftWithRelations extends Shift {
 
 export interface ShiftFilter {
   locationId?: string;
+  locationIds?: string[];
   status?: string;
   startDate?: Date;
   endDate?: Date;
@@ -82,6 +83,13 @@ export const shiftRepository = {
       )
       .orderBy('shifts.start_time', 'asc');
 
+    if (filter?.locationIds) {
+      if (filter.locationIds.length === 0) {
+        query = query.whereRaw('1 = 0');
+      } else {
+        query = query.whereIn('shifts.location_id', filter.locationIds);
+      }
+    }
     if (filter?.locationId) {
       query = query.where('shifts.location_id', filter.locationId);
     }

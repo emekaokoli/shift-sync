@@ -4,6 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "predev": "pnpm --filter @shift-sync/shared build",
+    "prebuild": "pnpm --filter @shift-sync/shared build",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "start": "vite preview",

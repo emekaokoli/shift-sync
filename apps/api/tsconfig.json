@@ -2,8 +2,18 @@
   "compilerOptions": {
     "target": "es2016",
     "module": "commonjs",
+    "moduleResolution": "Node",
     "outDir": "./dist",
     "rootDir": "../..",
+    "baseUrl": ".",
+    "paths": {
+      "@shift-sync/shared": [
+        "../shared/src/index.ts"
+      ],
+      "@shift-sync/shared/*": [
+        "../shared/src/*"
+      ]
+    },
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,

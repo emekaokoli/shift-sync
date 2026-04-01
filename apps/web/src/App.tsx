@@ -12,7 +12,7 @@ function AppContent() {
       <RouterProvider
         router={router}
         context={{
-          auth: { user },
+          auth: { user, isAuthenticated: !!user },
           queryClient,
         }}
         defaultPreload="intent"

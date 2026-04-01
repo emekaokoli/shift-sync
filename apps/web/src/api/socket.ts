@@ -59,6 +59,10 @@ class SocketClient {
     this.socket?.on('shift:updated', callback);
   }
 
+  onShiftPublished(callback: (data: unknown) => void) {
+    this.socket?.on('shift:published', callback);
+  }
+
   onShiftDeleted(callback: (data: unknown) => void) {
     this.socket?.on('shift:deleted', callback);
   }

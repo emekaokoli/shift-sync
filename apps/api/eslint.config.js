@@ -25,10 +25,6 @@ export default [
       '@typescript-eslint/no-unused-vars': [
         'error',
         { argsIgnorePattern: '^_' },
-        {
-          singleQuote: true,
-          parser: 'flow',
-        },
       ],
       '@typescript-eslint/no-explicit-any': 'warn',
       'no-console': 'off',
