@@ -391,15 +391,48 @@ This architecture prioritizes:
 
 ---
 
+## 13. Recent Updates
+
+### Audit Logging System
+- All schedule changes are logged with who, when, before/after state
+- Audit logs API: GET `/audit` (admin only), GET `/audit/shifts/:id` (manager+), GET `/audit/export` (admin only)
+- Frontend audit viewer with filtering and CSV export
+
+### Toast Components
+Toast notifications use function-based approach (not React components):
+```typescript
+// Correct usage
+showSuccessToast("Saved successfully");
+showErrorToast("Error occurred", "Please try again");
+
+// NOT as components
+<SuccessToast message="..." />  // ❌ Won't work
+```
+
+### Repository Layer Enhancements
+All repositories now support:
+- Transaction parameter (`trx?: Knex.Transaction`)
+- Version checking for optimistic locking (`findVersion`, `updateWithVersion`)
+- Validation inside transactions (`deleteWithValidation`, `createWithValidation`)
+
+### Recent Fixes
+- Audit router registered in index.ts
+- Toast components converted to functions for proper rendering
+- Type safety improvements in staffRepository
+
+---
+
 ## Status
 
-| Item                  | Status |
-| --------------------- | ------ |
-| Architecture defined  | ✅     |
-| Edge cases documented | ✅     |
-| Shared package        | ✅     |
-| Knex.js migrations    | ✅     |
-| Repository layer      | ✅     |
-| Backend domain layer  | ✅     |
-| Frontend routes       | ✅     |
-| Ready to implement    | ✅     |
+| Item | Status |
+|------|--------|
+| Architecture defined | ✅ |
+| Edge cases documented | ✅ |
+| Shared package | ✅ |
+| Knex.js migrations | ✅ |
+| Repository layer | ✅ |
+| Backend domain layer | ✅ |
+| Frontend routes | ✅ |
+| Audit logging | ✅ |
+| Toast notifications | ✅ |
+| Ready to deploy | ✅ |

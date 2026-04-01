@@ -39,7 +39,19 @@ prioritysoft/
 ├── shared/               # Shared types, schemas, constants (@shift-sync/shared)
 ├── package.json          # Monorepo scripts
 ├── pnpm-workspace.yaml
-└── AGENTS.md             # This file
+├── AGENTS.md             # Developer documentation
+└── architecturedecision.md  # Architecture decisions
+```
+
+---
+
+### shared/src/
+```
+shared/src/
+├── index.ts         # Re-exports all public APIs
+├── types.ts         # TypeScript interfaces
+├── schemas.ts       # Zod validation schemas
+└── constants.ts    # App constants (roles, statuses, constraints)
 ```
 
 ---
@@ -330,12 +342,12 @@ All endpoints are prefixed with `/api/v1/`
 
 ## Hard Rules
 
-### Rule 1: Types in `apps/shared`
+### Rule 1: Types in `shared/`
 
 Always define shared types in `shared/src/types.ts`. Never define types in `apps/api` or `apps/web`.
 
 ```typescript
-// ✅ GOOD: Define in apps/shared/src/types.ts
+// ✅ GOOD: Define in shared/src/types.ts
 export interface User {
   id: string;
   name: string;
@@ -518,8 +530,27 @@ pnpm install              # Install all dependencies
 pnpm db:migrate          # Run Knex migrations
 pnpm db:seed             # Seed database
 pnpm dev                 # Start all apps
-pnpm dev:backend         # Start backend only
+pnpm dev:api             # Start backend only
 pnpm dev:web             # Start frontend only
+```
+
+### Adding a New API Endpoint
+1. Add route in appropriate file in `apps/api/src/api/`
+2. Use repository methods from `apps/api/src/infrastructure/repositories/`
+3. Return responses using `ResponseUtils`
+4. Add Zod validation schema in `shared/src/schemas.ts`
+5. Export type in `shared/src/index.ts`
+
+### Adding a New Frontend Page
+1. Create route file in `apps/web/src/routes/`
+2. Use React Query hooks from `apps/web/src/hooks/`
+3. Access auth state via Zustand store: `useAuthStore()`
+4. Follow existing page patterns
+
+### Running Tests
+```bash
+pnpm test                # Run all tests
+pnpm test:watch         # Run tests in watch mode
 ```
 
 ### Adding a New API Endpoint

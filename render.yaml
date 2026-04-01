@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: shiftsync-api
+    env: node
+    region: oregon
+    buildCommand: pnpm install && pnpm --filter @shift-sync/shared build && pnpm --filter @shift-sync/api build && cd apps/api && pnpm db:migrate:prod && pnpm db:seed:prod
+    startCommand: pnpm --filter @shift-sync/api start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_PROD_URL
+        fromDatabase:
+          name: shift-sync-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: APP_NAME
+        value: ShiftSync API
+      - key: FRONTEND_URL
+        sync: false
