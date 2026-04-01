@@ -25,11 +25,11 @@ const config: DbConfig = {
       acquireTimeoutMillis: 10000,
     },
     migrations: {
-      directory: './src/infrastructure/database/migrations',
+      directory: './infrastructure/database/migrations',
       tableName: 'knex_migrations',
     },
     seeds: {
-      directory: './src/infrastructure/database/seeds',
+      directory: './infrastructure/database/seeds',
     },
   },
 
@@ -43,11 +43,11 @@ const config: DbConfig = {
       acquireTimeoutMillis: 10000,
     },
     migrations: {
-      directory: './src/infrastructure/database/migrations',
+      directory: './infrastructure/database/migrations',
       tableName: 'knex_migrations',
     },
     seeds: {
-      directory: './src/infrastructure/database/seeds',
+      directory: './infrastructure/database/seeds',
     },
   },
 
@@ -61,11 +61,11 @@ const config: DbConfig = {
       acquireTimeoutMillis: 30000,
     },
     migrations: {
-      directory: path.join('./src/infrastructure/database/migrations'),
+      directory: path.join('./infrastructure/database/migrations'),
       tableName: 'knex_migrations',
     },
     seeds: {
-      directory: path.join('./src/infrastructure/database/seeds'),
+      directory: path.join('./infrastructure/database/seeds'),
     },
   },
 };
