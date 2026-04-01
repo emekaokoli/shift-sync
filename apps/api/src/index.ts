@@ -22,12 +22,14 @@ import { setupSocketIO } from './infrastructure/socket';
 export function createApp(): Express {
   const app = express();
 
+  const allowedOrigins =
+    process.env.NODE_ENV === 'production'
+      ? [process.env.FRONTEND_URL || 'https://shift-sync-frontend.onrender.com']
+      : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000'];
+
   app.use(
     cors({
-      origin:
-        process.env.NODE_ENV === 'production'
-          ? process.env.FRONTEND_URL
-          : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000'],
+      origin: allowedOrigins,
       credentials: true,
     })
   );
