@@ -1,7 +1,7 @@
 services:
   - type: web
     name: shiftsync-api
-    env: node
+    runtime: node
     region: oregon
     buildCommand: pnpm install && pnpm --filter @shift-sync/shared build && pnpm --filter @shift-sync/api build && cd apps/api && pnpm db:migrate:prod && pnpm db:seed:prod
     startCommand: pnpm --filter @shift-sync/api start
@@ -21,4 +21,13 @@ services:
       - key: APP_NAME
         value: ShiftSync API
       - key: FRONTEND_URL
-        sync: false
+        value: https://shift-sync-frontend.onrender.com
+
+  - type: web
+    name: shiftsync-frontend
+    runtime: static
+    buildCommand: pnpm install && pnpm --filter @shift-sync/web build
+    staticPublishPath: ./apps/web/dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://shift-sync-backend-ncvy.onrender.com
