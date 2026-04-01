@@ -4,28 +4,18 @@ import { useAuthStore } from "@/lib/stores";
 import { Link, Outlet, useNavigate } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import { LogOut, User } from 'lucide-react';
-import { useEffect, useState } from 'react';
 
 
 export function Root() {
   const navigate = useNavigate();
-  const [mounted, setMounted] = useState(false);
   
   const { user, accessToken, logout } = useAuthStore();
   const isAuthenticated = !!accessToken;
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const handleLogout = () => {
     logout();
     navigate({ to: '/auth/login' });
   };
-
-  if (!mounted) {
-    return null;
-  }
 
   return (
     <div className="w-full min-h-screen flex flex-col justify-start">
