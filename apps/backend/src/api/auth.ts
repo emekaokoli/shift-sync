@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { hashPassword, verifyPassword, signToken, verifyToken, extractToken } from "../infrastructure/auth";
+import { hashPassword, verifyPassword, signToken, verifyToken, extractToken, signAccessToken } from "../infrastructure/auth";
 import db from "../infrastructure/database";
 import { ResponseUtils } from "../infrastructure/response";
 
@@ -36,14 +36,15 @@ router.post("/login", async (req, res) => {
       return ResponseUtils.unauthorized(res, "Invalid email or password");
     }
 
-    const token = signToken({
+    const tokens = signToken({
       userId: user.id,
       email: user.email,
       role: user.role,
     });
 
     return ResponseUtils.success(res, {
-      token,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
       user: {
         id: user.id,
         email: user.email,
@@ -88,14 +89,15 @@ router.post("/register", async (req, res) => {
       })
       .returning(["id", "email", "name", "role", "timezone", "desired_hours"]);
 
-    const token = signToken({
+    const tokens = signToken({
       userId: user.id,
       email: user.email,
       role: user.role,
     });
 
     return ResponseUtils.created(res, {
-      token,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
       user: {
         id: user.id,
         email: user.email,
@@ -113,6 +115,44 @@ router.post("/register", async (req, res) => {
         error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join(", "),
       );
     }
+    return ResponseUtils.handleError(res, error);
+  }
+});
+
+router.post("/refresh", async (req, res) => {
+  try {
+    const refreshToken = extractToken(req.headers.authorization);
+
+    if (!refreshToken) {
+      return ResponseUtils.unauthorized(res, "No refresh token provided");
+    }
+
+    const payload = verifyToken(refreshToken);
+
+    if (!payload) {
+      return ResponseUtils.unauthorized(res, "Invalid or expired refresh token");
+    }
+
+    const user = await db("users")
+      .where({ id: payload.userId })
+      .select("id", "email", "name", "role", "timezone", "desired_hours")
+      .first();
+
+    if (!user) {
+      return ResponseUtils.unauthorized(res, "User not found");
+    }
+
+    const tokens = signToken({
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+    });
+
+    return ResponseUtils.success(res, {
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+    }, "Token refreshed successfully");
+  } catch (error) {
     return ResponseUtils.handleError(res, error);
   }
 });

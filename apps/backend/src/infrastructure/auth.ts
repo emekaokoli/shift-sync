@@ -3,7 +3,8 @@ import jwt, { type SignOptions } from 'jsonwebtoken';
 
 const JWT_SECRET: string =
   process.env.JWT_SECRET || 'dev-secret-change-in-production';
-const JWT_EXPIRES_IN: string = process.env.JWT_EXPIRES_IN || '7d';
+const JWT_ACCESS_EXPIRES_IN: string = '5m';
+const JWT_REFRESH_EXPIRES_IN: string = '2h';
 
 export interface JWTPayload {
   userId: string;
@@ -22,10 +23,23 @@ export async function verifyPassword(
   return bcrypt.compare(password, hash);
 }
 
-export function signToken(payload: JWTPayload): string {
+export function signAccessToken(payload: JWTPayload): string {
   return jwt.sign(payload, JWT_SECRET, {
-    expiresIn: JWT_EXPIRES_IN,
+    expiresIn: JWT_ACCESS_EXPIRES_IN,
   } as SignOptions);
+}
+
+export function signRefreshToken(payload: JWTPayload): string {
+  return jwt.sign(payload, JWT_SECRET, {
+    expiresIn: JWT_REFRESH_EXPIRES_IN,
+  } as SignOptions);
+}
+
+export function signToken(payload: JWTPayload): { accessToken: string; refreshToken: string } {
+  return {
+    accessToken: signAccessToken(payload),
+    refreshToken: signRefreshToken(payload),
+  };
 }
 
 export function verifyToken(token: string): JWTPayload | null {
