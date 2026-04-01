@@ -53,7 +53,10 @@ const config: DbConfig = {
 
   production: {
     client: 'postgresql',
-    connection: DATABASE_PROD_URL,
+    connection: {
+      connectionString: DATABASE_PROD_URL,
+      ssl: { rejectUnauthorized: false },
+    },
     pool: {
       min: 2,
       max: 10,
