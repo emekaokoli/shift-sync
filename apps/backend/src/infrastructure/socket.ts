@@ -80,7 +80,19 @@ export function setupSocketIO(httpServer: HTTPServer) {
     });
   });
 
+  // Store io in global for access from other modules
+  (global as Record<string, unknown>).io = io;
+  
   return io;
+}
+
+let ioInstance: ReturnType<typeof setupSocketIO> | null = null;
+
+export function getIO() {
+  if (!ioInstance) {
+    ioInstance = (global as Record<string, unknown>).io as ReturnType<typeof setupSocketIO> | null;
+  }
+  return ioInstance;
 }
 
 // Helper functions to emit events

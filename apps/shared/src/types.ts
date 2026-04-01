@@ -167,7 +167,9 @@ export interface Violation {
   details?: Record<string, unknown>;
 }
 
-export type ValidationResult = { ok: true } | { ok: false; violations: Violation[] };
+export type ValidationResult =
+  | { ok: true }
+  | { ok: false; violations: Violation[] };
 
 export interface ApiResponse<T = unknown> {
   success: boolean;
@@ -184,4 +186,32 @@ export interface PaginatedData<T> {
     total: number;
     totalPages: number;
   };
+}
+
+export interface OvertimeSummary {
+  totalHours: number;
+  staffCount: number;
+  atLimitCount: number;
+  overLimitCount: number;
+  weekStart: string;
+  weekEnd: string;
+}
+
+export interface DailyHours {
+  date: string;
+  hours: number;
+}
+
+export interface StaffHours {
+  staffId: string;
+  staffName: string;
+  weeklyHours: number;
+  isOvertime: boolean;
+  isWarning: boolean;
+  dailyHours: DailyHours[];
+}
+
+export interface OvertimeResponse {
+  summary: OvertimeSummary;
+  staff: StaffHours[];
 }
