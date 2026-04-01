@@ -2,16 +2,16 @@ import cors from 'cors';
 import express, { Express, json } from 'express';
 import helmet from 'helmet';
 import { createServer as createHttpServer, Server as HttpServer } from 'http';
-import pino from 'pino-http';
 import path from 'path';
-import authRouter from './api/auth';
+import pino from 'pino-http';
 import auditRouter from './api/audit';
+import authRouter from './api/auth';
 import locationsRouter from './api/locations';
+import notificationsRouter from './api/notifications';
 import shiftsRouter from './api/shifts';
 import skillsRouter from './api/skills';
 import staffRouter from './api/staff';
 import swapsRouter from './api/swaps';
-import notificationsRouter from './api/notifications';
 import db from './infrastructure/database';
 import { errorHandler } from './infrastructure/errorHandler';
 import { logger } from './infrastructure/logger';
@@ -98,5 +98,8 @@ export function createServer(app: Express): HttpServer {
   return httpServer;
 }
 
-const app = createApp();
-createServer(app);
+// Only auto-start in non-production or when explicitly running this file
+if (require.main === module) {
+  const app = createApp();
+  createServer(app);
+}
